@@ -8,7 +8,11 @@ using namespace fdm;
 constexpr std::string NAME = "Slingshot";
 std::vector<Projectile*> projectiles;
 
+inline const float maxZoom = 0.2;
+
 float drawFraction = 0;
+float savedFOV;
+bool saveFOV = true;
 bool isRightButtonPressed = false;
 
 // Initialize the DLLMain
@@ -26,24 +30,27 @@ $hook(void, StateIntro, init, StateManager& s)
 
 void shoot(Player* player, World* world) {
 	
-	glm::vec4 direction = (player->reachEndpoint- player->cameraPos);
-	float length = glm::length(direction);
-	direction /= length;
-	
-	std::string c = std::to_string(direction.x);
+	glm::vec4 speed = (player->reachEndpoint- player->cameraPos);
+	float length = glm::length(speed);
+	speed /= length;
+	speed *= 100;
+
+	std::string c = std::to_string(speed.x);
 	
 	stl::uuid id= stl::uuid()(c.c_str());
 	Console::printLine(stl::uuid::to_string(id));
 
 	nlohmann::json attributes;
-	attributes["direction.x"] = direction.x;
-	attributes["direction.y"] = direction.y;
-	attributes["direction.z"] = direction.z;
-	attributes["direction.w"] = direction.w;
+	attributes["speed.x"] = speed.x;
+	attributes["speed.y"] = speed.y;
+	attributes["speed.z"] = speed.z;
+	attributes["speed.w"] = speed.w;
 
-	attributes["velocity"] = 2;
+	attributes["damage"] = 7;
 
 	std::unique_ptr<Entity> projectile = Entity::instantiateEntity("Projectile", id, player->cameraPos, "Projectile", attributes);
+
+	(dynamic_cast<Projectile*>(projectile.get()))->ownerPlayer = player;
 
 	Chunk * chunk=world->getChunkFromCoords(player->cameraPos.x, player->cameraPos.z, player->cameraPos.w);
 	world->addEntityToChunk(projectile, chunk);
@@ -56,13 +63,12 @@ $hookStatic(std::unique_ptr<Entity>, Entity, instantiateEntity, const stl::strin
 
 		result->id = id;
 		result->setPos(pos);
-		result->direction.x = attributes["direction.x"].get<float>();
-		result->direction.y = attributes["direction.y"].get<float>();
-		result->direction.z = attributes["direction.z"].get<float>();
-		result->direction.w = attributes["direction.w"].get<float>();
+		result->speed.x = attributes["speed.x"].get<float>();
+		result->speed.y = attributes["speed.y"].get<float>();
+		result->speed.z = attributes["speed.z"].get<float>();
+		result->speed.w = attributes["speed.w"].get<float>();
 
-		result->velocity = attributes["velocity"].get<float>();
-
+		result->damage = attributes["damage"].get<float>();
 
 		return result;
 	}
@@ -74,7 +80,8 @@ $hook(void, Player, update, World* world, double dt, EntityPlayer* entityPlayer)
 	original(self, world,dt, entityPlayer);
 	bool isHoldingSlingshot = self->hotbar.getSlot(self->hotbar.selectedIndex)->get()->getName() == "Slingshot";
 	if (self->keys.rightMouseDown &&isHoldingSlingshot) {
-		drawFraction += std::min(1.0, drawFraction+dt);
+		if (drawFraction == 0) saveFOV = true;
+		drawFraction = std::min(1.0, drawFraction+dt);
 	}
 	else if (isHoldingSlingshot && drawFraction>0){
 		drawFraction = 0;
@@ -86,6 +93,24 @@ $hook(void, Player, update, World* world, double dt, EntityPlayer* entityPlayer)
 	for (auto* p : projectiles) {
 		p->update(world, dt);
 	}
+}
+
+// Update FOV for zoom when aiming
+$hook(void, StateGame, render, StateManager& s) {
+	
+	if (saveFOV) { 
+		savedFOV = self->FOV;
+		Console::printLine("Saved FOV: ", savedFOV);
+		saveFOV = false; 
+	}
+	if (drawFraction > 0) {
+		Console::printLine(self->FOV);
+		self->FOV = savedFOV - savedFOV * maxZoom * drawFraction; 
+	}
+	else { 
+		self->FOV = savedFOV;
+	}
+	original(self, s);
 }
 
 // entity (on ground or in hand)
