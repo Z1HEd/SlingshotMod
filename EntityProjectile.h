@@ -2,11 +2,11 @@
 
 namespace fdm
 {
-	class Projectile : public Entity
+	class EntityProjectile : public Entity
 	{
 	public:
 		glm::vec4 position;
-		glm::vec4 speed;
+		glm::vec4 linearVelocity; // In case in the future there would also be angular velocity
 		Player* ownerPlayer;
 		float damage;
 		float gravity = 50;
@@ -18,16 +18,16 @@ namespace fdm
 
 		stl::string getName() override
 		{
-			return "Projectile";
+			return "EntityProjectile";
 		}
 		void update(World* world, double dt) override
 		{
 			if (timeTillVisible > 0) {
 				timeTillVisible -= dt;
 			}
-			speed -= glm::vec4{ 0,1,0,0 }*gravity* (float)dt;
-			if (glm::length(speed)<0.001) return;
-			glm::vec4 newPos = position + speed * (float) dt;
+			linearVelocity -= glm::vec4{ 0,1,0,0 }*gravity* (float)dt;
+			if (glm::length(linearVelocity)<0.001) return;
+			glm::vec4 newPos = position + linearVelocity * (float) dt;
 			
 			Entity* intersect = world->getEntityIntersection(position,newPos,ownerPlayer->EntityPlayerID);
 
@@ -55,25 +55,27 @@ namespace fdm
 			glm::vec3 color;
 			switch (type) {
 			case 0:
-				color = { 0.7,0.7,0.7 };
+				color =  glm::vec3{ 0.7,0.7,0.7 };
 				break;
 			case 1:
-				color = { 0.75, 0.8, 0.7 };
+				color =  glm::vec3{ 0.75, 0.8, 0.7 };
 				break;
 			case 2:
-				color = {0.5,0.2,0.5};
+				color =  glm::vec3{0.5,0.2,0.5};
 				break;
 			}
 
 			m4::Mat5 material = MV;
+			material.translate(glm::vec4{ 0.0f, 0.0f, 0.0f, 0.001f });
 			material.translate(position);
-			material.scale(glm::vec4(0.03, 0.03, 0.03, 0.03));
+			material.scale(glm::vec4{ 0.03f });
 
-			const Shader* slingshotShader = ShaderManager::get("tetColorNormalShader");
+			Console::printLine("Before get: ", glGetError()); // 1282
+			const Shader* slingshotShader = ShaderManager::get("projectileShader");
+
 			slingshotShader->use();
 
 			glUniform4f(glGetUniformLocation(slingshotShader->id(), "lightDir"), 0, 1, 0, 0);
-
 			glUniform4f(glGetUniformLocation(slingshotShader->id(), "inColor"), color.r, color.g, color.b, 1);
 			glUniform1fv(glGetUniformLocation(slingshotShader->id(), "MV"), sizeof(material) / sizeof(float), &material[0][0]);
 
@@ -82,11 +84,7 @@ namespace fdm
 		nlohmann::json saveAttributes() override
 		{
 			nlohmann::json attributes;
-			attributes["speed.x"] = speed.x;
-			attributes["speed.y"] = speed.y;
-			attributes["speed.z"] = speed.z;
-			attributes["speed.w"] = speed.w;
-
+			attributes["linearVelocity"] = m4::vec4ToJson(linearVelocity);
 			attributes["damage"] = damage;
 			attributes["type"] = type;
 			return attributes;
@@ -94,18 +92,16 @@ namespace fdm
 		nlohmann::json getServerUpdateAttributes() override
 		{
 			nlohmann::json attributes;
-			attributes["speed.x"] = speed.x;
-			attributes["speed.y"] = speed.y;
-			attributes["speed.z"] = speed.z;
-			attributes["speed.w"] = speed.w;
-
+			attributes["linearVelocity"] = m4::vec4ToJson(linearVelocity);
 			attributes["damage"] = damage;
 			attributes["type"] = type;
 			return attributes;
 		}
 		void applyServerUpdate(const nlohmann::json& j, World* world) override
 		{
-			//Idk whats that i just copied everything
+			linearVelocity= m4::vec4FromJson(j["linearVelocity"]);
+			damage = j["damage"].get<float>();
+			type = j["type"].get<int>();
 		}
 		glm::vec4 getPos() override
 		{
@@ -117,7 +113,7 @@ namespace fdm
 		}
 		bool action(World* world, Entity* actor, int action, const nlohmann::json& details) override
 		{
-			Console::printLine("Action! actor: ", actor->getName());
+			//Console::printLine("Action! actor: ", actor->getName()); //Never actually prints anything, not needed i guess
 			return false;
 		}
 	};

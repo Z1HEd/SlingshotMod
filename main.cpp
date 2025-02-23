@@ -1,7 +1,7 @@
 #define DEBUG_CONSOLE // Uncomment this if you want a debug console to start. You can use the Console class to print. You can use Console::inStrings to get input.
 
 #include <4dm.h>
-#include "Projectile.h"
+#include "EntityProjectile.h"
 #include "4DKeyBinds.h"
 
 using namespace fdm;
@@ -9,11 +9,11 @@ using namespace fdm;
 std::vector<std::string> itemNames{
 	"Slingshot",
 	"Deadly Slingshot",
-	"Stone bullet",
-	"Iron bullet",
-	"Deadly bullet"
+	"Stone Bullet",
+	"Iron Bullet",
+	"Deadly Bullet"
 };
-std::vector<Projectile*> projectiles;
+std::vector<EntityProjectile*> projectiles;
 
 inline const float maxZoom = 0.2;
 
@@ -33,8 +33,6 @@ TexRenderer bulletRenderer;
 gui::Text bulletCountText;
 gui::Interface ui;
 FontRenderer font{};
-
-AudioManager stretchSound;
 
 // Initialize the DLLMain
 initDLL
@@ -60,39 +58,26 @@ void subtractBullet(InventoryPlayer inventory) {
 	}
 }
 
-//Initialize opengl stuff
-$hook(void, StateIntro, init, StateManager& s)
-{
-	original(self, s);
-
-	glewExperimental = true;
-	glewInit();
-	glfwInit();
-}
-
 //Shooting a slingshot
 void shoot(Player* player, World* world,bool isDeadly) {
 	
-	glm::vec4 speed = (player->reachEndpoint- player->cameraPos);
-	float length = glm::length(speed);
-	speed /= length;
+	glm::vec4 linearVelocity = (player->reachEndpoint- player->cameraPos);
+	float length = glm::length(linearVelocity);
+	linearVelocity /= length;
 	
-	if (isDeadly) speed *= 150;
-	else speed *= 100;
+	if (isDeadly) linearVelocity *= 150;
+	else linearVelocity *= 100;
 
 
 	float clampedDrawFration = std::max(0.3f, drawFraction);
-	speed *= clampedDrawFration;
+	linearVelocity *= clampedDrawFration;
 
-	stl::uuid id= stl::uuid()(std::format("Projectile{}",Projectile::getNextId()));
+	stl::uuid id= stl::uuid()(std::format("EntityProjectile{}",EntityProjectile::getNextId()));
 
 	
 
 	nlohmann::json attributes;
-	attributes["speed.x"] = speed.x;
-	attributes["speed.y"] = speed.y;
-	attributes["speed.z"] = speed.z;
-	attributes["speed.w"] = speed.w;
+	attributes["linearVelocity"] = m4::ivec4ToJson(linearVelocity);
 
 	switch (selectedBullet) {
 	case 0:
@@ -109,9 +94,9 @@ void shoot(Player* player, World* world,bool isDeadly) {
 		break;
 	}
 
-	std::unique_ptr<Entity> projectile = Entity::instantiateEntity("Projectile", id, player->cameraPos, "Projectile", attributes);
+	std::unique_ptr<Entity> projectile = Entity::instantiateEntity("EntityProjectile", id, player->cameraPos, "EntityProjectile", attributes);
 
-	(dynamic_cast<Projectile*>(projectile.get()))->ownerPlayer = player;
+	(dynamic_cast<EntityProjectile*>(projectile.get()))->ownerPlayer = player;
 
 	Chunk * chunk=world->getChunkFromCoords(player->cameraPos.x, player->cameraPos.z, player->cameraPos.w);
 	world->addEntityToChunk(projectile, chunk);
@@ -120,17 +105,13 @@ void shoot(Player* player, World* world,bool isDeadly) {
 }
 $hookStatic(std::unique_ptr<Entity>, Entity, instantiateEntity, const stl::string& entityName, const stl::uuid& id, const glm::vec4& pos, const stl::string& type, const nlohmann::json& attributes)
 {
-	if (type == "Projectile")
+	if (type == "EntityProjectile")
 	{
-		auto result = std::make_unique<Projectile>();
+		auto result = std::make_unique<EntityProjectile>();
 
 		result->id = id;
 		result->setPos(pos);
-		result->speed.x = attributes["speed.x"].get<float>();
-		result->speed.y = attributes["speed.y"].get<float>();
-		result->speed.z = attributes["speed.z"].get<float>();
-		result->speed.w = attributes["speed.w"].get<float>();
-
+		result->linearVelocity = m4::vec4FromJson(attributes["linearVelocity"]);
 		result->damage = attributes["damage"].get<float>();
 		result->type = attributes["type"].get<int>();
 
@@ -153,7 +134,7 @@ $hook(void, Player, update, World* world, double dt, EntityPlayer* entityPlayer)
 			saveFOV = true;
 			stl::string sound = "mods/Slingshot/Res/StretchSound.mp3";
 			stl::string voiceGroup = "ambience";
-			stretchSound.playSound4D(sound, voiceGroup, self->cameraPos, { 0,0,0,0 });
+			//stretchSound.playSound4D(sound, voiceGroup, self->cameraPos, { 0,0,0,0 });
 		}
 		if (isDeadly)
 			drawFraction = std::min(1.0, drawFraction+dt*1.4);
@@ -280,8 +261,6 @@ $hook(void, StateGame, init, StateManager& s)
 
 	ui.addElement(&bulletCountText);
 
-	stretchSound.loadSound("mods/Slingshot/Res/StretchSound.mp3");
-	stretchSound.updateBGM();
 }
 // Update FOV for zoom when aiming
 $hook(void, StateGame, render, StateManager& s) {
@@ -376,36 +355,31 @@ $hook(void, ItemTool, renderEntity, const m4::Mat5& mat, bool inHand, const glm:
 	const Shader* shaderWood = ShaderManager::get("blockNormalShader");
 	const Shader* slingshotShader = ShaderManager::get("tetSolidColorNormalShader");
 	glBindTexture(tex->target, tex->ID); // i still didn't add Tex2D::use() or Tex2D::id() lollll
+
 	shaderWood->use();
-
-	
-	glUniform4fv(glGetUniformLocation(slingshotShader->id(), "lightDir"), 1, &lightDir[0]);
-
 	glUniform4fv(glGetUniformLocation(shaderWood->id(), "lightDir"), 1, &lightDir.x);
 	glUniform2ui(glGetUniformLocation(shaderWood->id(), "texSize"), 96, 16);
+	
+
+	
 	glUniform1fv(glGetUniformLocation(shaderWood->id(), "MV"), sizeof(handleMat) / sizeof(float), &handleMat[0][0]);
 	
 	BlockInfo::renderItemMesh(handleType);
 
-	glUniform4fv(glGetUniformLocation(shaderWood->id(), "lightDir"), 1, &lightDir.x);
-	glUniform2ui(glGetUniformLocation(shaderWood->id(), "texSize"), 96, 16);
 	glUniform1fv(glGetUniformLocation(shaderWood->id(), "MV"), sizeof(connectorMat) / sizeof(float), &connectorMat[0][0]);
 
 	BlockInfo::renderItemMesh(handleType);
 
-	glUniform4fv(glGetUniformLocation(shaderWood->id(), "lightDir"), 1, &lightDir.x);
-	glUniform2ui(glGetUniformLocation(shaderWood->id(), "texSize"), 96, 16);
 	glUniform1fv(glGetUniformLocation(shaderWood->id(), "MV"), sizeof(leftMat) / sizeof(float), &leftMat[0][0]);
 
 	BlockInfo::renderItemMesh(handleType);
 
-	glUniform4fv(glGetUniformLocation(shaderWood->id(), "lightDir"), 1, &lightDir.x);
-	glUniform2ui(glGetUniformLocation(shaderWood->id(), "texSize"), 96, 16);
 	glUniform1fv(glGetUniformLocation(shaderWood->id(), "MV"), sizeof(rightMat) / sizeof(float), &rightMat[0][0]);
 
 	BlockInfo::renderItemMesh(handleType);
 
 	slingshotShader->use();
+	glUniform4fv(glGetUniformLocation(slingshotShader->id(), "lightDir"), 1, &lightDir[0]);
 
 	glUniform4f(glGetUniformLocation(slingshotShader->id(), "inColor"), colorString.r, colorString.g, colorString.b, 1);
 	glUniform1fv(glGetUniformLocation(slingshotShader->id(), "MV"), sizeof(leftStringMat) / sizeof(float), &leftStringMat[0][0]);
@@ -527,11 +501,16 @@ void initItemNAME()
 
 $hook(void, StateIntro, init, StateManager& s)
 {
-	// ...
 	original(self, s);
-	// ...
+
+	glewExperimental = true;
+	glewInit();
+	glfwInit();
+
 	initItemNAME();
-	// ...
+
+	ShaderManager::load("projectileShader", "../../assets/shaders/tetNormal.vs", "Res/projectile.fs", "../../assets/shaders/tetNormal.gs");
+	Console::printLine("Loaded: ",glGetError()); // 0
 }
 
 void pickNextBullet(GLFWwindow* window, int action, int mods)
