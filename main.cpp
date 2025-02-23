@@ -34,6 +34,9 @@ gui::Text bulletCountText;
 gui::Interface ui;
 FontRenderer font{};
 
+static stl::string stretchSound = "G:/Programs/steam/steamapps/common/4D Miner Demo/mods/SlingshotMod/Res/StretchSound.mp3";
+stl::string voiceGroup = "ambience";
+
 // Initialize the DLLMain
 initDLL
 
@@ -124,6 +127,7 @@ $hookStatic(std::unique_ptr<Entity>, Entity, instantiateEntity, const stl::strin
 $hook(void, Player, update, World* world, double dt, EntityPlayer* entityPlayer){
 	original(self, world,dt, entityPlayer);
 	
+
 	bulletCount = getSelectedBulletCount(self->inventoryAndEquipment);
 	Item* i = self->hotbar.getSlot(self->hotbar.selectedIndex)->get();
 	bool isDeadly= (i!=nullptr && i->getName() == "Deadly Slingshot");
@@ -132,9 +136,7 @@ $hook(void, Player, update, World* world, double dt, EntityPlayer* entityPlayer)
 	if (self->keys.rightMouseDown &&isHoldingSlingshot && bulletCount>0) {
 		if (drawFraction == 0) {
 			saveFOV = true;
-			stl::string sound = "mods/Slingshot/Res/StretchSound.mp3";
-			stl::string voiceGroup = "ambience";
-			//stretchSound.playSound4D(sound, voiceGroup, self->cameraPos, { 0,0,0,0 });
+			AudioManager::playSound4D(stretchSound, voiceGroup, self->cameraPos, { 0,0,0,0 });
 		}
 		if (isDeadly)
 			drawFraction = std::min(1.0, drawFraction+dt*1.4);
@@ -290,12 +292,12 @@ $hook(void, ItemTool, renderEntity, const m4::Mat5& mat, bool inHand, const glm:
 	if (self->name != "Slingshot" && self->name != "Deadly Slingshot")
 		return original(self, mat, inHand, lightDir);
 
+
 	BlockInfo::TYPE handleType;
 	if (self->name == "Deadly Slingshot")
 		handleType = BlockInfo::MIDNIGHT_LEAF; // Looks bad, but thats the best texture i found
 	else
 		handleType = BlockInfo::WOOD;
-
 
 
 	glm::vec4 offset;
@@ -395,6 +397,7 @@ $hook(void, ItemTool, renderEntity, const m4::Mat5& mat, bool inHand, const glm:
 	glUniform1fv(glGetUniformLocation(slingshotShader->id(), "MV"), sizeof(stringMat) / sizeof(float), &stringMat[0][0]);
 
 	ItemMaterial::barRenderer->render();
+	
 }
 
 // item slot tool
@@ -508,6 +511,21 @@ $hook(void, StateIntro, init, StateManager& s)
 	glfwInit();
 
 	initItemNAME();
+
+	if (!AudioManager::loadSound("StretchSound.mp3")) Console::printLine("Cannot load sound 1");
+	if (!AudioManager::loadSound("/StretchSound.mp3")) Console::printLine("Cannot load sound 2");
+	if (!AudioManager::loadSound("./StretchSound.mp3")) Console::printLine("Cannot load sound 3");
+
+	if (!AudioManager::loadSound("Res/StretchSound.mp3")) Console::printLine("Cannot load sound 4");
+	if (!AudioManager::loadSound("/Res/StretchSound.mp3")) Console::printLine("Cannot load sound 5");
+	if (!AudioManager::loadSound("./Res/StretchSound.mp3")) Console::printLine("Cannot load sound 6");
+
+	if (!AudioManager::loadSound("mods/SlingshotMod/Res/StretchSound.mp3")) Console::printLine("Cannot load sound 7");
+	if (!AudioManager::loadSound("/mods/SlingshotMod/Res/StretchSound.mp3")) Console::printLine("Cannot load sound 8");
+	if (!AudioManager::loadSound("./mods/SlingshotMod/Res/StretchSound.mp3")) Console::printLine("Cannot load sound 9");
+
+	if (!AudioManager::loadSound("G:/Programs/steam/steamapps/common/4D Miner Demo/mods/SlingshotMod/Res/StretchSound.mp3")) Console::printLine("Cannot load sound 0");
+
 
 	ShaderManager::load("projectileShader", "../../assets/shaders/tetNormal.vs", "Res/projectile.fs", "../../assets/shaders/tetNormal.gs");
 	Console::printLine("Loaded: ",glGetError()); // 0
