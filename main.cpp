@@ -1,4 +1,4 @@
-#define DEBUG_CONSOLE // Uncomment this if you want a debug console to start. You can use the Console class to print. You can use Console::inStrings to get input.
+//#define DEBUG_CONSOLE // Uncomment this if you want a debug console to start. You can use the Console class to print. You can use Console::inStrings to get input.
 
 #include <4dm.h>
 #include "EntityProjectile.h"
@@ -95,8 +95,8 @@ void subtractBullet(InventoryPlayer& inventory) {
 //Shooting a slingshot
 void shoot(Player* player, World* world,bool isDeadly) {
 	
-	constexpr float randomRange = 0.02f;
-	constexpr float randomRangeDeadly = 0.012f;
+	constexpr float randomRange = 0.015f;
+	constexpr float randomRangeDeadly = 0.007f;
 	float range = isDeadly ? randomRangeDeadly : randomRange;
 
 	glm::vec4 linearVelocity = glm::normalize(player->forward + glm::vec4{
@@ -107,6 +107,7 @@ void shoot(Player* player, World* world,bool isDeadly) {
 
 	if (isDeadly) linearVelocity *= 150;
 	else linearVelocity *= 100;
+	//if (selectedBullet == 3) linearVelocity *= 0.7;
 
 	float clampedDrawFration = std::max(0.3f, drawFraction);
 	linearVelocity *= clampedDrawFration;

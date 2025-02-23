@@ -17,38 +17,43 @@ void EntityProjectile::update(World* world, double dt)
 	{
 		Entity* target = nullptr;
 		float targetDist = FLT_MAX;
-		glm::vec4 targetD{ 0 };
+		glm::vec4 towardsTarget{ 0 };
 
-		world->entitiesMutex.lock(); // gotta love multi-threading
+		//world->entitiesMutex.lock(); // gotta love multi-threading
 		for (int x = -1; x <= 1; ++x)
 			for (int z = -1; z <= 1; ++z)
 				for (int w = -1; w <= 1; ++w)
 				{
 					Chunk* chunk = world->getChunkFromCoords(position.x + 8 * x, position.z + 8 * z, position.w + 8 * w);
 
-					for (auto& e : chunk->entities)
-					{
-						if (e == this) continue;
-						if (e->id == ownerPlayer->EntityPlayerID) continue;
+					if (!chunk) continue;
 
-						glm::vec4 d = e->getPos() - getPos();
-						float distSqr = glm::dot(d, d);
+					for (auto& entity : chunk->entities)
+					{
+						if (entity == this) continue;
+						if (entity->id == ownerPlayer->EntityPlayerID) continue;
+						if (entity->isBlockEntity()) continue;
+						if (entity->getName() == "Item") continue;
+						if (entity->dead) continue; //in case
+
+						glm::vec4 towardsCurrent = entity->getPos() - getPos();
+						float distSqr = glm::dot(towardsCurrent, towardsCurrent);
 						if (distSqr < targetDist * targetDist)
 						{
 							targetDist = glm::sqrt(distSqr);
-							target = e;
-							targetD = d;
+							target = entity;
+							towardsTarget = towardsCurrent;
 						}
 					}
 				}
-		world->entitiesMutex.unlock();
+		//world->entitiesMutex.unlock();
 
-		if (target)
+		if (target && targetDist < 7)
 		{
-			// linearVelocity += boo
+			linearVelocity -= linearVelocity * ((float)dt * 13);
+			linearVelocity += towardsTarget * (float)dt / (targetDist * targetDist / 450);
 		}
 	}
-
 	if (timeTillVisible > 0)
 		timeTillVisible -= dt;
 
