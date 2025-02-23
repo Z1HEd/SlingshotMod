@@ -6,6 +6,42 @@
 
 using namespace fdm;
 
+// framerate independent a=lerp(a,b,t)
+float deltaRatio(float ratio, double dt, double targetDelta)
+{
+	const double rDelta = dt / (1.0 / (1.0 / targetDelta));
+	const double s = 1.0 - ratio;
+
+	return (float)(1.0 - pow(s, rDelta));
+}
+float deltaRatio(float ratio, double dt)
+{
+	return deltaRatio(ratio, dt, 1.0 / 100.0);
+}
+float lerp(float a, float b, float ratio, bool clampRatio = true)
+{
+	if (clampRatio)
+		ratio = glm::clamp(ratio, 0.f, 1.f);
+	return a + (b - a) * ratio;
+}
+glm::vec4 lerp(const glm::vec4& a, const glm::vec4& b, float ratio, bool clampRatio = true)
+{
+	return glm::vec4{ lerp(a.x, b.x, ratio, clampRatio),lerp(a.y, b.y, ratio, clampRatio),lerp(a.z, b.z, ratio, clampRatio),lerp(a.w, b.w, ratio, clampRatio) };
+}
+float ilerp(float a, float b, float ratio, double dt, bool clampRatio = true)
+{
+	return lerp(a, b, deltaRatio(ratio, dt), clampRatio);
+}
+glm::vec4 ilerp(const glm::vec4& a, const glm::vec4& b, float ratio, double dt, bool clampRatio = true)
+{
+	return lerp(a, b, deltaRatio(ratio, dt), clampRatio);
+}
+
+float easeInOutQuad(float x)
+{
+	return x < 0.5f ? 2.0f * x * x : 1.0f - powf(-2.0f * x + 2.0f, 2.0f) / 2.0f;
+}
+
 std::vector<std::string> itemNames{
 	"Slingshot",
 	"Deadly Slingshot",
@@ -13,13 +49,10 @@ std::vector<std::string> itemNames{
 	"Iron Bullet",
 	"Deadly Bullet"
 };
-std::vector<EntityProjectile*> projectiles;
 
 inline const float maxZoom = 0.2;
 
 float drawFraction = 0;
-float savedFOV;
-bool saveFOV = true;
 bool isRightButtonPressed = false;
 int selectedBullet = 0;
 int bulletCount = 0;
@@ -34,13 +67,13 @@ gui::Text bulletCountText;
 gui::Interface ui;
 FontRenderer font{};
 
-static stl::string stretchSound = "G:/Programs/steam/steamapps/common/4D Miner Demo/mods/SlingshotMod/Res/StretchSound.mp3";
-stl::string voiceGroup = "ambience";
+inline static stl::string stretchSound;
+inline static const char* voiceGroup = "ambience";
 
 // Initialize the DLLMain
 initDLL
 
-int getSelectedBulletCount(InventoryPlayer inventory) {
+int getSelectedBulletCount(InventoryPlayer& inventory) {
 	int count = 0;
 	for (int slot = 0;slot < inventory.getSlotCount(); slot++) {
 		Item* i = inventory.getSlot(slot)->get();
@@ -51,7 +84,7 @@ int getSelectedBulletCount(InventoryPlayer inventory) {
 	return count;
 }
 
-void subtractBullet(InventoryPlayer inventory) {
+void subtractBullet(InventoryPlayer& inventory) {
 	for (int slot = 0;slot < inventory.getSlotCount(); slot++) {
 		Item* i = inventory.getSlot(slot)->get();
 		if (i != nullptr && i->getName() == itemNames[2 + selectedBullet]) {
@@ -64,20 +97,15 @@ void subtractBullet(InventoryPlayer inventory) {
 //Shooting a slingshot
 void shoot(Player* player, World* world,bool isDeadly) {
 	
-	glm::vec4 linearVelocity = (player->reachEndpoint- player->cameraPos);
-	float length = glm::length(linearVelocity);
-	linearVelocity /= length;
+	glm::vec4 linearVelocity = player->forward;
 	
 	if (isDeadly) linearVelocity *= 150;
 	else linearVelocity *= 100;
 
-
 	float clampedDrawFration = std::max(0.3f, drawFraction);
 	linearVelocity *= clampedDrawFration;
 
-	stl::uuid id= stl::uuid()(std::format("EntityProjectile{}",EntityProjectile::getNextId()));
-
-	
+	linearVelocity += player->vel;
 
 	nlohmann::json attributes;
 	attributes["linearVelocity"] = m4::ivec4ToJson(linearVelocity);
@@ -97,7 +125,7 @@ void shoot(Player* player, World* world,bool isDeadly) {
 		break;
 	}
 
-	std::unique_ptr<Entity> projectile = Entity::instantiateEntity("EntityProjectile", id, player->cameraPos, "EntityProjectile", attributes);
+	std::unique_ptr<Entity> projectile = Entity::createWithAttributes("Projectile", player->cameraPos, attributes);
 
 	(dynamic_cast<EntityProjectile*>(projectile.get()))->ownerPlayer = player;
 
@@ -108,15 +136,15 @@ void shoot(Player* player, World* world,bool isDeadly) {
 }
 $hookStatic(std::unique_ptr<Entity>, Entity, instantiateEntity, const stl::string& entityName, const stl::uuid& id, const glm::vec4& pos, const stl::string& type, const nlohmann::json& attributes)
 {
-	if (type == "EntityProjectile")
+	if (type == "projectile")
 	{
 		auto result = std::make_unique<EntityProjectile>();
 
 		result->id = id;
 		result->setPos(pos);
 		result->linearVelocity = m4::vec4FromJson(attributes["linearVelocity"]);
-		result->damage = attributes["damage"].get<float>();
-		result->type = attributes["type"].get<int>();
+		result->damage = attributes["damage"];
+		result->type = attributes["type"];
 
 		return result;
 	}
@@ -126,7 +154,6 @@ $hookStatic(std::unique_ptr<Entity>, Entity, instantiateEntity, const stl::strin
 //Right click handling
 $hook(void, Player, update, World* world, double dt, EntityPlayer* entityPlayer){
 	original(self, world,dt, entityPlayer);
-	
 
 	bulletCount = getSelectedBulletCount(self->inventoryAndEquipment);
 	Item* i = self->hotbar.getSlot(self->hotbar.selectedIndex)->get();
@@ -135,7 +162,6 @@ $hook(void, Player, update, World* world, double dt, EntityPlayer* entityPlayer)
 
 	if (self->keys.rightMouseDown &&isHoldingSlingshot && bulletCount>0) {
 		if (drawFraction == 0) {
-			saveFOV = true;
 			AudioManager::playSound4D(stretchSound, voiceGroup, self->cameraPos, { 0,0,0,0 });
 		}
 		if (isDeadly)
@@ -149,9 +175,6 @@ $hook(void, Player, update, World* world, double dt, EntityPlayer* entityPlayer)
 	}
 	else {
 		drawFraction = 0;
-	}
-	for (auto* p : projectiles) {
-		p->update(world, dt);
 	}
 }
 
@@ -235,6 +258,18 @@ $hook(void, StateGame, init, StateManager& s)
 {
 	original(self, s);
 
+	(*Entity::blueprints)["Projectile"] =
+	{
+		{ "type", "projectile" },
+		{ "baseAttributes",
+			{
+				{"type", 0},
+				{"linearVelocity", {0.0f, 0.0f, 0.0f, 0.0f}},
+				{"damage", 0.0f}
+			}
+		}
+	};
+
 	player = &self->player;
 
 	font = { ResourceManager::get("pixelFont.png"), ShaderManager::get("textShader") };
@@ -266,19 +301,17 @@ $hook(void, StateGame, init, StateManager& s)
 }
 // Update FOV for zoom when aiming
 $hook(void, StateGame, render, StateManager& s) {
-	
-	if (saveFOV) { 
-		savedFOV = self->FOV;
-		saveFOV = false; 
-	}
+	static double lastTime = glfwGetTime() - 0.01;
+	double dt = glfwGetTime() - lastTime;
+	lastTime = glfwGetTime();
 	if (drawFraction > 0) {
-		self->FOV = savedFOV - savedFOV * maxZoom * drawFraction; 
+		self->FOV = lerp(StateSettings::instanceObj->currentFOV+30, (StateSettings::instanceObj->currentFOV + 30) - (StateSettings::instanceObj->currentFOV + 30) * maxZoom, easeInOutQuad(drawFraction));
 		int width, height;
 		glfwGetWindowSize(s.window,&width, &height);
 		self->updateProjection(glm::max(width, 1), glm::max(height, 1));
 	}
-	else { 
-		self->FOV = savedFOV;
+	else {
+		self->FOV = ilerp(self->FOV, StateSettings::instanceObj->currentFOV + 30, 0.38f, dt);
 		int width, height;
 		glfwGetWindowSize(s.window, &width, &height);
 		self->updateProjection(glm::max(width, 1), glm::max(height, 1));
@@ -299,70 +332,90 @@ $hook(void, ItemTool, renderEntity, const m4::Mat5& mat, bool inHand, const glm:
 	else
 		handleType = BlockInfo::WOOD;
 
+	static double lastTime = glfwGetTime() - 0.01;
+	double dt = glfwGetTime() - lastTime;
+	lastTime = glfwGetTime();
 
-	glm::vec4 offset;
+	static glm::vec4 offset{ 0 };
+	static float rot = 0;
 	if (drawFraction > 0) {
-		offset = { -1.5, 0, 0, 0 };
+		offset = lerp(glm::vec4{ 0 }, glm::vec4{ -1.0f, 0, 0, 0 }, easeInOutQuad(drawFraction));
+		rot = lerp(0.0f, -glm::pi<float>() / 8.0f, easeInOutQuad(drawFraction));
 	}
 	else {
-		offset={ 0,0,0,0 };
+		offset = ilerp(offset, glm::vec4{ 0 }, 0.3f, dt);
+		rot = ilerp(rot, 0.0f, 0.35f, dt);
 	}
 	glm::vec3 colorDeadly;
 	glm::vec3 colorString;
 	colorDeadly = glm::vec3{ 0.7f };
 	colorString = glm::vec3{ 0.9f,0.9f,1, };
-
-	m4::Mat5 transform{ 1 };
-	//transform *= m4::Mat5(m4::Rotor({ m4::wedge({1, 0, 0, 0}, {0, 1, 0, 0}), glm::pi<float>() / 4 }));
-	transform.translate(glm::vec4{ -0.5f, -0.5f, -0.5f, -0.5f });
-	
+	m4::Rotor rotor = m4::Rotor
+	(
+		{
+			m4::wedge({1, 0, 0, 0}, {0, 1, 0, 0}), // XY
+			rot
+		}
+	);
 
 	m4::Mat5 handleMat = mat;
-	handleMat.translate(glm::vec4{ 0, -0.2f, 0, 0 }+ offset);
+	handleMat *= rotor;
+	handleMat.translate(glm::vec4{ 0, -0.2f, 0, 0 });
+	handleMat.translate(offset);
 	handleMat.scale(glm::vec4(0.2f, 1.3f, 0.2f, 0.2f));
-	handleMat *= transform;
+	handleMat.translate(glm::vec4{ -0.5f, -0.5f, -0.5f, -0.5f });
 
 	m4::Mat5 connectorMat = mat;
-	connectorMat.translate(glm::vec4{ 0, .55, 0, 0 } + offset);
+	connectorMat *= rotor;
+	connectorMat.translate(glm::vec4{ 0, .55, 0, 0 });
+	connectorMat.translate(offset);
 	connectorMat.scale(glm::vec4(.6, 0.2f, 0.2f, 0.2f));
 	connectorMat*= m4::Mat5(m4::Rotor({ m4::wedge({1, 0, 0, 0}, {0, 1, 0, 0}), glm::pi<float>() / 2 }));
-	connectorMat *= transform;
+	connectorMat.translate(glm::vec4{ -0.5f, -0.5f, -0.5f, -0.5f });
 
 	m4::Mat5 leftMat = mat;
-	leftMat.translate(glm::vec4{ .4, .95, 0, 0 } + offset);
+	leftMat *= rotor;
+	leftMat.translate(glm::vec4{ .4, .95, 0, 0 });
+	leftMat.translate(offset);
 	leftMat.scale(glm::vec4(.2, 1, 0.2f, 0.2f));
-	leftMat *= transform;
+	leftMat.translate(glm::vec4{ -0.5f, -0.5f, -0.5f, -0.5f });
 
 	m4::Mat5 rightMat = mat;
-	rightMat.translate(glm::vec4{ -.4, .95, 0, 0 } + offset);
+	rightMat *= rotor;
+	rightMat.translate(glm::vec4{ -.4, .95, 0, 0 });
+	rightMat.translate(offset);
 	rightMat.scale(glm::vec4(.2, 1, 0.2f, 0.2f));
-	rightMat *= transform;
+	rightMat.translate(glm::vec4{ -0.5f, -0.5f, -0.5f, -0.5f });
 
 	m4::Mat5 leftStringMat = mat;
-	leftStringMat.translate(glm::vec4{ .4, 1.37, 0, 0 } + offset);
+	leftStringMat *= rotor;
+	leftStringMat.translate(glm::vec4{ .4, 1.37, 0, 0 });
+	leftStringMat.translate(offset);
 	leftStringMat.scale(glm::vec4(.22, .06f, 0.22f, 0.06f));
-	leftStringMat *= transform;
+	leftStringMat.translate(glm::vec4{ -0.5f, -0.5f, -0.5f, -0.5f });
 
 	m4::Mat5 rightStringMat = mat;
-	rightStringMat.translate(glm::vec4{ -.4, 1.37, 0, 0 } + offset);
+	rightStringMat *= rotor;
+	rightStringMat.translate(glm::vec4{ -.4, 1.37, 0, 0 });
+	rightStringMat.translate(offset);
 	rightStringMat.scale(glm::vec4(.22, 0.06f, 0.22f, 0.06f));
-	rightStringMat *= transform;
+	rightStringMat.translate(glm::vec4{ -0.5f, -0.5f, -0.5f, -0.5f });
 
 	m4::Mat5 stringMat = mat;
-	stringMat.translate(glm::vec4{ 0, 1.37, 0, 0 } + offset);
+	stringMat *= rotor;
+	stringMat.translate(glm::vec4{ 0, 1.37, 0, 0 });
+	stringMat.translate(offset);
 	stringMat.scale(glm::vec4(1, 0.03f, 0.03f, 0.03f));
-	stringMat *= transform;
+	stringMat.translate(glm::vec4{ -0.5f, -0.5f, -0.5f, -0.5f });
 
 	const Tex2D* tex = ResourceManager::get("tiles.png", false);
 	const Shader* shaderWood = ShaderManager::get("blockNormalShader");
 	const Shader* slingshotShader = ShaderManager::get("tetSolidColorNormalShader");
-	glBindTexture(tex->target, tex->ID); // i still didn't add Tex2D::use() or Tex2D::id() lollll
+	glBindTexture(tex->target, tex->ID); // tr1ngle still didn't add Tex2D::use() or Tex2D::id() :skull:
 
 	shaderWood->use();
 	glUniform4fv(glGetUniformLocation(shaderWood->id(), "lightDir"), 1, &lightDir.x);
 	glUniform2ui(glGetUniformLocation(shaderWood->id(), "texSize"), 96, 16);
-	
-
 	
 	glUniform1fv(glGetUniformLocation(shaderWood->id(), "MV"), sizeof(handleMat) / sizeof(float), &handleMat[0][0]);
 	
@@ -381,19 +434,17 @@ $hook(void, ItemTool, renderEntity, const m4::Mat5& mat, bool inHand, const glm:
 	BlockInfo::renderItemMesh(handleType);
 
 	slingshotShader->use();
-	glUniform4fv(glGetUniformLocation(slingshotShader->id(), "lightDir"), 1, &lightDir[0]);
-
+	glUniform4fv(glGetUniformLocation(slingshotShader->id(), "lightDir"), 1, &lightDir.x);
 	glUniform4f(glGetUniformLocation(slingshotShader->id(), "inColor"), colorString.r, colorString.g, colorString.b, 1);
+
 	glUniform1fv(glGetUniformLocation(slingshotShader->id(), "MV"), sizeof(leftStringMat) / sizeof(float), &leftStringMat[0][0]);
 
 	ItemMaterial::barRenderer->render();
 
-	glUniform4f(glGetUniformLocation(slingshotShader->id(), "inColor"), colorString.r, colorString.g, colorString.b, 1);
 	glUniform1fv(glGetUniformLocation(slingshotShader->id(), "MV"), sizeof(rightStringMat) / sizeof(float), &rightStringMat[0][0]);
 
 	ItemMaterial::barRenderer->render();
 
-	glUniform4f(glGetUniformLocation(slingshotShader->id(), "inColor"), colorString.r, colorString.g, colorString.b, 1);
 	glUniform1fv(glGetUniformLocation(slingshotShader->id(), "MV"), sizeof(stringMat) / sizeof(float), &stringMat[0][0]);
 
 	ItemMaterial::barRenderer->render();
@@ -403,9 +454,9 @@ $hook(void, ItemTool, renderEntity, const m4::Mat5& mat, bool inHand, const glm:
 // item slot tool
 $hook(void, ItemTool, render, const glm::ivec2& pos)
 {
-	
 	int index = std::find(itemNames.begin(), itemNames.end(), self->name)- itemNames.begin();
-	if (index == 5)
+
+	if (index == itemNames.size())
 		return original(self, pos);
 
 	TexRenderer& tr = *ItemTool::tr; // or TexRenderer& tr = ItemTool::tr; after 0.3
@@ -422,7 +473,7 @@ $hook(void, ItemTool, render, const glm::ivec2& pos)
 $hook(void, ItemMaterial, render, const glm::ivec2& pos)
 {
 	int index = std::find(itemNames.begin(), itemNames.end(), self->name) - itemNames.begin();
-	if (index == 5)
+	if (index == itemNames.size())
 		return original(self, pos);
 
 	TexRenderer& tr = *ItemTool::tr; // or TexRenderer& tr = ItemTool::tr; after 0.3
@@ -434,7 +485,20 @@ $hook(void, ItemMaterial, render, const glm::ivec2& pos)
 	tr.render();
 
 	tr.texture = ogTex; // return to the original texture
+}
 
+$hook(bool, ItemTool, isDeadly)
+{
+	if (self->name == "Deadly Slingshot")
+		return true;
+	return original(self);
+}
+
+$hook(bool, ItemMaterial, isDeadly)
+{
+	if (self->name == "Deadly Bullet")
+		return true;
+	return original(self);
 }
 
 // add recipes
@@ -512,23 +576,11 @@ $hook(void, StateIntro, init, StateManager& s)
 
 	initItemNAME();
 
-	if (!AudioManager::loadSound("StretchSound.mp3")) Console::printLine("Cannot load sound 1");
-	if (!AudioManager::loadSound("/StretchSound.mp3")) Console::printLine("Cannot load sound 2");
-	if (!AudioManager::loadSound("./StretchSound.mp3")) Console::printLine("Cannot load sound 3");
+	stretchSound = std::format("../../{}/Res/StretchSound.mp3", fdm::getModPath(fdm::modID));
 
-	if (!AudioManager::loadSound("Res/StretchSound.mp3")) Console::printLine("Cannot load sound 4");
-	if (!AudioManager::loadSound("/Res/StretchSound.mp3")) Console::printLine("Cannot load sound 5");
-	if (!AudioManager::loadSound("./Res/StretchSound.mp3")) Console::printLine("Cannot load sound 6");
-
-	if (!AudioManager::loadSound("mods/SlingshotMod/Res/StretchSound.mp3")) Console::printLine("Cannot load sound 7");
-	if (!AudioManager::loadSound("/mods/SlingshotMod/Res/StretchSound.mp3")) Console::printLine("Cannot load sound 8");
-	if (!AudioManager::loadSound("./mods/SlingshotMod/Res/StretchSound.mp3")) Console::printLine("Cannot load sound 9");
-
-	if (!AudioManager::loadSound("G:/Programs/steam/steamapps/common/4D Miner Demo/mods/SlingshotMod/Res/StretchSound.mp3")) Console::printLine("Cannot load sound 0");
-
+	if (!AudioManager::loadSound(stretchSound)) Console::printLine("Cannot load sound (skill issue)");
 
 	ShaderManager::load("projectileShader", "../../assets/shaders/tetNormal.vs", "Res/projectile.fs", "../../assets/shaders/tetNormal.gs");
-	Console::printLine("Loaded: ",glGetError()); // 0
 }
 
 void pickNextBullet(GLFWwindow* window, int action, int mods)
@@ -539,6 +591,15 @@ void pickNextBullet(GLFWwindow* window, int action, int mods)
 void pickPreviousBullet(GLFWwindow* window, int action, int mods)
 {
 	if (action == GLFW_PRESS && player != nullptr && !player->inventoryManager.secondary && --selectedBullet<0) selectedBullet = 2;
+}
+
+$hook(void, StateGame, updateProjection, int width, int height)
+{
+	original(self, width, height);
+	
+	const Shader* sh = ShaderManager::get("projectileShader");
+	sh->use();
+	glUniformMatrix4fv(glGetUniformLocation(sh->id(), "P"), 1, false, &self->projection3D[0][0]);
 }
 
 $exec
