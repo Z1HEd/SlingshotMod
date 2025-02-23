@@ -3,6 +3,7 @@
 #include <4dm.h>
 #include "EntityProjectile.h"
 #include "4DKeyBinds.h"
+#include <glm/gtc/random.hpp>
 
 using namespace fdm;
 
@@ -36,7 +37,6 @@ glm::vec4 ilerp(const glm::vec4& a, const glm::vec4& b, float ratio, double dt, 
 {
 	return lerp(a, b, deltaRatio(ratio, dt), clampRatio);
 }
-
 float easeInOutQuad(float x)
 {
 	return x < 0.5f ? 2.0f * x * x : 1.0f - powf(-2.0f * x + 2.0f, 2.0f) / 2.0f;
@@ -47,7 +47,8 @@ std::vector<std::string> itemNames{
 	"Deadly Slingshot",
 	"Stone Bullet",
 	"Iron Bullet",
-	"Deadly Bullet"
+	"Deadly Bullet",
+	"Solenoid Bullet"
 };
 
 inline const float maxZoom = 0.2;
@@ -66,9 +67,6 @@ TexRenderer bulletRenderer;
 gui::Text bulletCountText;
 gui::Interface ui;
 FontRenderer font{};
-
-inline static stl::string stretchSound;
-inline static const char* voiceGroup = "ambience";
 
 // Initialize the DLLMain
 initDLL
@@ -97,8 +95,16 @@ void subtractBullet(InventoryPlayer& inventory) {
 //Shooting a slingshot
 void shoot(Player* player, World* world,bool isDeadly) {
 	
-	glm::vec4 linearVelocity = player->forward;
-	
+	constexpr float randomRange = 0.02f;
+	constexpr float randomRangeDeadly = 0.012f;
+	float range = isDeadly ? randomRangeDeadly : randomRange;
+
+	glm::vec4 linearVelocity = glm::normalize(player->forward + glm::vec4{
+		glm::linearRand(-range, range),
+		glm::linearRand(-range, range),
+		glm::linearRand(-range, range),
+		glm::linearRand(-range, range) });
+
 	if (isDeadly) linearVelocity *= 150;
 	else linearVelocity *= 100;
 
@@ -106,6 +112,7 @@ void shoot(Player* player, World* world,bool isDeadly) {
 	linearVelocity *= clampedDrawFration;
 
 	linearVelocity += player->vel;
+	
 
 	nlohmann::json attributes;
 	attributes["linearVelocity"] = m4::ivec4ToJson(linearVelocity);
@@ -123,6 +130,10 @@ void shoot(Player* player, World* world,bool isDeadly) {
 		attributes["damage"] = 23 * clampedDrawFration;
 		attributes["type"] = 2;
 		break;
+	case 3:
+		attributes["damage"] = 17 * clampedDrawFration;
+		attributes["type"] = 3;
+		break;
 	}
 
 	std::unique_ptr<Entity> projectile = Entity::createWithAttributes("Projectile", player->cameraPos, attributes);
@@ -131,6 +142,8 @@ void shoot(Player* player, World* world,bool isDeadly) {
 
 	Chunk * chunk=world->getChunkFromCoords(player->cameraPos.x, player->cameraPos.z, player->cameraPos.w);
 	world->addEntityToChunk(projectile, chunk);
+
+	AudioManager::playSound4D(EntityProjectile::slingshotSound, EntityProjectile::voiceGroup, player->cameraPos, { 0,0,0,0 });
 
 	subtractBullet(player->inventoryAndEquipment);
 }
@@ -162,7 +175,7 @@ $hook(void, Player, update, World* world, double dt, EntityPlayer* entityPlayer)
 
 	if (self->keys.rightMouseDown &&isHoldingSlingshot && bulletCount>0) {
 		if (drawFraction == 0) {
-			AudioManager::playSound4D(stretchSound, voiceGroup, self->cameraPos, { 0,0,0,0 });
+			AudioManager::playSound4D(EntityProjectile::stretchSound, EntityProjectile::voiceGroup, self->cameraPos, { 0,0,0,0 });
 		}
 		if (isDeadly)
 			drawFraction = std::min(1.0, drawFraction+dt*1.4);
@@ -281,7 +294,7 @@ $hook(void, StateGame, init, StateManager& s)
 	bulletBackgroundRenderer.shader = ShaderManager::get("tex2DShader");
 	bulletBackgroundRenderer.init();
 	
-	bulletRenderer.texture = ResourceManager::get("Res/Items.png", true);
+	bulletRenderer.texture = ResourceManager::get("assets/Items.png", true);
 	bulletRenderer.shader = ShaderManager::get("tex2DShader");
 	bulletRenderer.init();
 
@@ -393,7 +406,7 @@ $hook(void, ItemTool, renderEntity, const m4::Mat5& mat, bool inHand, const glm:
 	leftStringMat.translate(offset);
 	leftStringMat.scale(glm::vec4(.22, .06f, 0.22f, 0.06f));
 	leftStringMat.translate(glm::vec4{ -0.5f, -0.5f, -0.5f, -0.5f });
-
+ 
 	m4::Mat5 rightStringMat = mat;
 	rightStringMat *= rotor;
 	rightStringMat.translate(glm::vec4{ -.4, 1.37, 0, 0 });
@@ -462,7 +475,7 @@ $hook(void, ItemTool, render, const glm::ivec2& pos)
 	TexRenderer& tr = *ItemTool::tr; // or TexRenderer& tr = ItemTool::tr; after 0.3
 	const Tex2D* ogTex = tr.texture; // remember the original texture
 	
-	tr.texture = ResourceManager::get("Res/Items.png", true); // set to custom texture
+	tr.texture = ResourceManager::get("assets/Items.png", true); // set to custom texture
 	tr.setClip(index * 36, 0, 36, 36);
 	tr.setPos(pos.x, pos.y, 70, 72);
 	tr.render();
@@ -479,7 +492,7 @@ $hook(void, ItemMaterial, render, const glm::ivec2& pos)
 	TexRenderer& tr = *ItemTool::tr; // or TexRenderer& tr = ItemTool::tr; after 0.3
 	const Tex2D* ogTex = tr.texture; // remember the original texture
 
-	tr.texture = ResourceManager::get("Res/Items.png", true); // set to custom texture
+	tr.texture = ResourceManager::get("assets/Items.png", true); // set to custom texture
 	tr.setClip(index * 36, 0, 36, 36);
 	tr.setPos(pos.x, pos.y, 70, 72);
 	tr.render();
@@ -543,6 +556,12 @@ $hookStatic(void, CraftingMenu, loadRecipes)
 		{"result", {{"name", itemNames[4]}, {"count", 6}}}
 		}
 	);
+	CraftingMenu::recipes->push_back(
+		nlohmann::json{
+		{"recipe", {{{"name", "Solenoid Bars"}, {"count", 1}}}},
+		{"result", {{"name", itemNames[5]}, {"count", 6}}}
+		}
+	);
 	
 }
 
@@ -556,7 +575,7 @@ void initItemNAME()
 		{ "baseAttributes", nlohmann::json::object() } // no attributes
 		};
 	}
-	for (int i = 2;i < 5; i++) {
+	for (int i = 2;i < itemNames.size(); i++) {
 		// add the custom item
 		(*Item::blueprints)[itemNames[i]] =
 		{
@@ -576,21 +595,25 @@ $hook(void, StateIntro, init, StateManager& s)
 
 	initItemNAME();
 
-	stretchSound = std::format("../../{}/Res/StretchSound.mp3", fdm::getModPath(fdm::modID));
+	EntityProjectile::stretchSound = std::format("../../{}/assets/StretchSound.ogg", fdm::getModPath(fdm::modID));
+	EntityProjectile::slingshotSound = std::format("../../{}/assets/Slingshot.ogg", fdm::getModPath(fdm::modID));
+	EntityProjectile::hitSound = std::format("../../{}/assets/Hit.ogg", fdm::getModPath(fdm::modID));
 
-	if (!AudioManager::loadSound(stretchSound)) Console::printLine("Cannot load sound (skill issue)");
+	if (!AudioManager::loadSound(EntityProjectile::stretchSound)) Console::printLine("Cannot load sound (skill issue)");
+	if (!AudioManager::loadSound(EntityProjectile::slingshotSound)) Console::printLine("Cannot load sound (skill issue)");
+	if (!AudioManager::loadSound(EntityProjectile::hitSound)) Console::printLine("Cannot load sound (skill issue)");
 
-	ShaderManager::load("projectileShader", "../../assets/shaders/tetNormal.vs", "Res/projectile.fs", "../../assets/shaders/tetNormal.gs");
+	ShaderManager::load("projectileShader", "../../assets/shaders/tetNormal.vs", "assets/projectile.fs", "../../assets/shaders/tetNormal.gs");
 }
 
 void pickNextBullet(GLFWwindow* window, int action, int mods)
 {
 	if (action == GLFW_PRESS && player!=nullptr && !player->inventoryManager.secondary)
-		selectedBullet = (selectedBullet + 1) % 3;
+		selectedBullet = (selectedBullet + 1) % 4;
 }
 void pickPreviousBullet(GLFWwindow* window, int action, int mods)
 {
-	if (action == GLFW_PRESS && player != nullptr && !player->inventoryManager.secondary && --selectedBullet<0) selectedBullet = 2;
+	if (action == GLFW_PRESS && player != nullptr && !player->inventoryManager.secondary && --selectedBullet<0) selectedBullet = 3;
 }
 
 $hook(void, StateGame, updateProjection, int width, int height)

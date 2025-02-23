@@ -2,6 +2,8 @@
 
 using namespace fdm;
 
+
+
 class EntityProjectile : public Entity
 {
 public:
@@ -12,6 +14,11 @@ public:
 	float gravity = 50;
 	float timeTillVisible = 0.02;
 	int type;
+	
+	static stl::string stretchSound;
+	static stl::string slingshotSound;
+	static stl::string hitSound;
+	inline static const char* voiceGroup = "ambience";
 
 	static int nextId;
 	static int getNextId();

@@ -3,6 +3,10 @@
 int EntityProjectile::nextId = 0;
 int EntityProjectile::getNextId() { return nextId++; }
 
+stl::string EntityProjectile::stretchSound="";
+stl::string EntityProjectile::slingshotSound="";
+stl::string EntityProjectile::hitSound="";
+
 stl::string EntityProjectile::getName()
 {
 	return "Projectile";
@@ -24,12 +28,14 @@ void EntityProjectile::update(World* world, double dt)
 
 	if (intersect != nullptr) {
 		intersect->takeDamage(damage, world);
-		Chunk* chunk = world->getChunkFromCoords(position.x, position.z, position.w);
+		Chunk* chunk = world->getChunkFromCoords(position.x, position.z, position.w); //so playable 
 		dead = true;
+		AudioManager::playSound4D(hitSound, voiceGroup, newPos, { 0,0,0,0 });
 		return;
 	}
 	else if (world->castRay(position, blockPos, endPos, newPos)) {
 		dead = BlockInfo::Blocks.at(world->getBlock(endPos)).solid;
+		AudioManager::playSound4D(hitSound, voiceGroup, newPos, { 0,0,0,0 });
 	}
 	position = newPos;
 }
@@ -50,6 +56,9 @@ void EntityProjectile::render(const World* world, const m4::Mat5& MV, bool glass
 		break;
 	case 2: // deadly
 		color = glm::vec3{ 232.0f / 255.0f, 77.0f / 255.0f, 193.0f / 255.0f } * 1.4f;
+		break;
+	case 3: // solenoid
+		color = glm::vec3{ 196.0f / 255.0f, 90.0f / 255.0f, 112.0f / 255.0f };
 		break;
 	}
 
