@@ -13,9 +13,45 @@ stl::string EntityProjectile::getName()
 }
 void EntityProjectile::update(World* world, double dt)
 {
-	if (timeTillVisible > 0) {
-		timeTillVisible -= dt;
+	if (type == 3) // solenoid
+	{
+		Entity* target = nullptr;
+		float targetDist = FLT_MAX;
+		glm::vec4 targetD{ 0 };
+
+		world->entitiesMutex.lock(); // gotta love multi-threading
+		for (int x = -1; x <= 1; ++x)
+			for (int z = -1; z <= 1; ++z)
+				for (int w = -1; w <= 1; ++w)
+				{
+					Chunk* chunk = world->getChunkFromCoords(position.x + 8 * x, position.z + 8 * z, position.w + 8 * w);
+
+					for (auto& e : chunk->entities)
+					{
+						if (e == this) continue;
+						if (e->id == ownerPlayer->EntityPlayerID) continue;
+
+						glm::vec4 d = e->getPos() - getPos();
+						float distSqr = glm::dot(d, d);
+						if (distSqr < targetDist * targetDist)
+						{
+							targetDist = glm::sqrt(distSqr);
+							target = e;
+							targetD = d;
+						}
+					}
+				}
+		world->entitiesMutex.unlock();
+
+		if (target)
+		{
+			// linearVelocity += boo
+		}
 	}
+
+	if (timeTillVisible > 0)
+		timeTillVisible -= dt;
+
 	linearVelocity -= glm::vec4{ 0,1,0,0 }*gravity * (float)dt;
 	//if (glm::length(linearVelocity) < 0.001) return; // sqrt(x*x + y*y + z*z + w*w) is slow
 	if (glm::dot(linearVelocity, linearVelocity) < 0.001f * 0.001f) return;   // x*x + y*y + z*z + w*w is fast (which is what the dot(a,a) does here)
@@ -28,7 +64,6 @@ void EntityProjectile::update(World* world, double dt)
 
 	if (intersect != nullptr) {
 		intersect->takeDamage(damage, world);
-		Chunk* chunk = world->getChunkFromCoords(position.x, position.z, position.w); //so playable 
 		dead = true;
 		AudioManager::playSound4D(hitSound, voiceGroup, newPos, { 0,0,0,0 });
 		return;
@@ -41,10 +76,8 @@ void EntityProjectile::update(World* world, double dt)
 }
 void EntityProjectile::render(const World* world, const m4::Mat5& MV, bool glasses)
 {
-
-	if (timeTillVisible > 0) {
+	if (timeTillVisible > 0)
 		return;
-	}
 
 	glm::vec3 color{ 1 };
 	switch (type) {
