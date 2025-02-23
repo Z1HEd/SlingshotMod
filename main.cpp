@@ -24,6 +24,7 @@ bool isRightButtonPressed = false;
 int selectedBullet = 0;
 int bulletCount = 0;
 bool isHoldingSlingshot = false;
+Player* player;
 
 QuadRenderer* simpleRenderer = Item::qr;
 QuadRenderer qr{};
@@ -219,6 +220,7 @@ $hook(void, Player, renderHud,GLFWwindow* window){
 	glEnable(GL_DEPTH_TEST);
 	original(self, window);
 }
+
 //Initialize UI  when entering world
 void viewportCallback(void* user, const glm::ivec4& pos, const glm::ivec2& scroll)
 {
@@ -249,6 +251,8 @@ void viewportCallback(void* user, const glm::ivec4& pos, const glm::ivec2& scrol
 $hook(void, StateGame, init, StateManager& s)
 {
 	original(self, s);
+
+	player = &self->player;
 
 	font = { ResourceManager::get("pixelFont.png"), ShaderManager::get("textShader") };
 	
@@ -532,11 +536,16 @@ $hook(void, StateIntro, init, StateManager& s)
 
 void pickNextBullet(GLFWwindow* window, int action, int mods)
 {
-	if (action == GLFW_PRESS)
+	if (action == GLFW_PRESS && player!=nullptr && !player->inventoryManager.secondary)
 		selectedBullet = (selectedBullet + 1) % 3;
+}
+void pickPreviousBullet(GLFWwindow* window, int action, int mods)
+{
+	if (action == GLFW_PRESS && player != nullptr && !player->inventoryManager.secondary && --selectedBullet<0) selectedBullet = 2;
 }
 
 $exec
 {
-	KeyBinds::addBind("Pick bullet", "Select next bullet for the slingshot", glfw::Keys::R, KeyBindsScope::PLAYER, pickNextBullet);
+	KeyBinds::addBind("Slingshot", "Next Bullet", glfw::Keys::R, KeyBindsScope::PLAYER, pickNextBullet);
+	KeyBinds::addBind("Slingshot", "Previous Bullet", glfw::Keys::F, KeyBindsScope::PLAYER, pickPreviousBullet);
 }
