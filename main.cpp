@@ -1,4 +1,4 @@
-//#define DEBUG_CONSOLE // Uncomment this if you want a debug console to start. You can use the Console class to print. You can use Console::inStrings to get input.
+#define DEBUG_CONSOLE // Uncomment this if you want a debug console to start. You can use the Console class to print. You can use Console::inStrings to get input.
 
 #include <4dm.h>
 #include "EntityProjectile.h"
@@ -174,6 +174,12 @@ $hook(void, Player, update, World* world, double dt, EntityPlayer* entityPlayer)
 	bool isDeadly= (i!=nullptr && i->getName() == "Deadly Slingshot");
 	isHoldingSlingshot = (i != nullptr && i->getName()=="Slingshot" || isDeadly);
 
+	if (!isHoldingSlingshot) {
+		i = self->equipment.getSlot(0)->get();
+		isDeadly = (i != nullptr && i->getName() == "Deadly Slingshot");
+		isHoldingSlingshot = (i != nullptr && i->getName() == "Slingshot" || isDeadly);
+	}
+
 	if (self->keys.rightMouseDown &&isHoldingSlingshot && bulletCount>0) {
 		if (drawFraction == 0) {
 			AudioManager::playSound4D(EntityProjectile::stretchSound, EntityProjectile::voiceGroup, self->cameraPos, { 0,0,0,0 });
@@ -339,6 +345,25 @@ $hook(void, ItemTool, renderEntity, const m4::Mat5& mat, bool inHand, const glm:
 	if (self->name != "Slingshot" && self->name != "Deadly Slingshot")
 		return original(self, mat, inHand, lightDir);
 
+	Item* itemInMainHand = (StateGame::instanceObj->player.hotbar.getSlot(StateGame::instanceObj->player.hotbar.selectedIndex))->get();
+
+	bool isSlingshotInMainHand = false;
+	if (itemInMainHand !=nullptr && (itemInMainHand->getName()=="Slingshot" || itemInMainHand->getName() == "Deadly Slingshot")) isSlingshotInMainHand = true;
+
+	bool isInMainHand=false;
+	if (itemInMainHand == self) isInMainHand = true;
+
+	glm::vec4 goalOffset;
+	float goalRotation;
+
+	if (isInMainHand) {
+		goalRotation = -glm::pi<float>() / 8.0f;
+		goalOffset = glm::vec4{ -1.0f, 0, 0, 0 };
+	}
+	else {
+		goalRotation = glm::pi<float>() / 8.0f;
+		goalOffset = glm::vec4{ 1.0f, 0, 0, 0 };
+	}
 
 	BlockInfo::TYPE handleType;
 	if (self->name == "Deadly Slingshot")
@@ -350,16 +375,20 @@ $hook(void, ItemTool, renderEntity, const m4::Mat5& mat, bool inHand, const glm:
 	double dt = glfwGetTime() - lastTime;
 	lastTime = glfwGetTime();
 
-	static glm::vec4 offset{ 0 };
-	static float rot = 0;
-	if (drawFraction > 0) {
-		offset = lerp(glm::vec4{ 0 }, glm::vec4{ -1.0f, 0, 0, 0 }, easeInOutQuad(drawFraction));
-		rot = lerp(0.0f, -glm::pi<float>() / 8.0f, easeInOutQuad(drawFraction));
+	glm::vec4 offset{ 0 }; // Had to make everything non static
+	float rot = 0;
+
+	if (drawFraction > 0 && inHand && (isInMainHand || !isSlingshotInMainHand) ) {
+		offset = lerp(glm::vec4{ 0 }, goalOffset, easeInOutQuad(drawFraction));
+		rot = lerp(0.0f, goalRotation, easeInOutQuad(drawFraction));
 	}
-	else {
-		offset = ilerp(offset, glm::vec4{ 0 }, 0.3f, dt);
-		rot = ilerp(rot, 0.0f, 0.35f, dt);
+	else if (inHand && (isInMainHand || !isSlingshotInMainHand)) {
+		offset = lerp(goalOffset, glm::vec4{ 0 }, 0.3f, dt);
+		rot = lerp(goalRotation, 0.0f, 0.35f, dt);
 	}
+
+	Console::printLine(goalRotation);
+
 	glm::vec3 colorDeadly;
 	glm::vec3 colorString;
 	colorDeadly = glm::vec3{ 0.7f };
