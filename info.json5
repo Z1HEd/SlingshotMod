@@ -1,7 +1,7 @@
 {
   id: "zihed.slingshot",
   name: "Slingshot",
-  author: "ZiHEd",
+  author: "ZiHEd, Tr1NgleDev",
   description: "A mod that adds a slingshot to the game",
   version: "1.0",
   gameVersion: "0.2.1.4",

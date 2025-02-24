@@ -1,4 +1,4 @@
-#define DEBUG_CONSOLE // Uncomment this if you want a debug console to start. You can use the Console class to print. You can use Console::inStrings to get input.
+//#define DEBUG_CONSOLE // Uncomment this if you want a debug console to start. You can use the Console class to print. You can use Console::inStrings to get input.
 
 #include <4dm.h>
 #include "EntityProjectile.h"
@@ -58,6 +58,7 @@ bool isRightButtonPressed = false;
 int selectedBullet = 0;
 int bulletCount = 0;
 bool isHoldingSlingshot = false;
+bool isSlingshotOffhand = false;
 Player* player;
 
 QuadRenderer* simpleRenderer = Item::qr;
@@ -219,14 +220,19 @@ $hook(void, Player, renderHud,GLFWwindow* window){
 			simpleRenderer->render();
 
 		}
-		
-		int posX = self->hotbar.renderPos.x + 70 + 34 * ((self->hotbar.selectedIndex + 1) % 2);
-		int posY = self->hotbar.renderPos.y + (self->hotbar.selectedIndex * 56);
-
+		int posX, posY;
+		if (!isSlingshotOffhand) {
+			 posX = self->hotbar.renderPos.x + 68 /*imperfect reality*/ + 34 * ((self->hotbar.selectedIndex + 1) % 2);
+			 posY = self->hotbar.renderPos.y + (self->hotbar.selectedIndex * 56);
+		}
+		else {
+			 posX = self->hotbar.renderPos.x + 78 + 34 * ((9) % 2);
+			 posY = self->hotbar.renderPos.y + (8 * 56)+6;
+		}
 
 		bulletBackgroundRenderer.setPos(posX, posY, 72, 72);
 		bulletBackgroundRenderer.setClip(0, 0, 36, 36);
-		bulletBackgroundRenderer.setColor(1, 1, 1, 0.8);
+		bulletBackgroundRenderer.setColor(1, 1, 1, 0.4);
 		bulletBackgroundRenderer.render();
 		
 		bulletRenderer.setPos(posX, posY, 72, 72);
@@ -339,6 +345,9 @@ $hook(void, StateGame, render, StateManager& s) {
 	original(self, s);
 }
 
+glm::vec4 savedOffset{ 0 };
+float savedRotation = 0;
+
 // entity (on ground or in hand)
 $hook(void, ItemTool, renderEntity, const m4::Mat5& mat, bool inHand, const glm::vec4& lightDir)
 {
@@ -347,11 +356,14 @@ $hook(void, ItemTool, renderEntity, const m4::Mat5& mat, bool inHand, const glm:
 
 	Item* itemInMainHand = (StateGame::instanceObj->player.hotbar.getSlot(StateGame::instanceObj->player.hotbar.selectedIndex))->get();
 
+	//Messiest boolean logic you will ever have the dispeasure of witnessing, but trust me, it works
 	bool isSlingshotInMainHand = false;
 	if (itemInMainHand !=nullptr && (itemInMainHand->getName()=="Slingshot" || itemInMainHand->getName() == "Deadly Slingshot")) isSlingshotInMainHand = true;
 
 	bool isInMainHand=false;
 	if (itemInMainHand == self) isInMainHand = true;
+
+	isSlingshotOffhand = (!isInMainHand && !isSlingshotInMainHand);
 
 	glm::vec4 goalOffset;
 	float goalRotation;
@@ -375,19 +387,17 @@ $hook(void, ItemTool, renderEntity, const m4::Mat5& mat, bool inHand, const glm:
 	double dt = glfwGetTime() - lastTime;
 	lastTime = glfwGetTime();
 
-	glm::vec4 offset{ 0 }; // Had to make everything non static
+	glm::vec4 offset{ 0 };
 	float rot = 0;
 
 	if (drawFraction > 0 && inHand && (isInMainHand || !isSlingshotInMainHand) ) {
-		offset = lerp(glm::vec4{ 0 }, goalOffset, easeInOutQuad(drawFraction));
-		rot = lerp(0.0f, goalRotation, easeInOutQuad(drawFraction));
+		offset = savedOffset= lerp(glm::vec4{ 0 }, goalOffset, easeInOutQuad(drawFraction));
+		rot = savedRotation =lerp(0.0f, goalRotation, easeInOutQuad(drawFraction));
 	}
 	else if (inHand && (isInMainHand || !isSlingshotInMainHand)) {
-		offset = lerp(goalOffset, glm::vec4{ 0 }, 0.3f, dt);
-		rot = lerp(goalRotation, 0.0f, 0.35f, dt);
+		offset = savedOffset = ilerp(savedOffset, glm::vec4{ 0 }, 0.3f, dt);
+		rot = savedRotation = ilerp(savedRotation, 0.0f, 0.35f, dt);
 	}
-
-	Console::printLine(goalRotation);
 
 	glm::vec3 colorDeadly;
 	glm::vec3 colorString;
