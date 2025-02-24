@@ -89,6 +89,7 @@ void subtractBullet(InventoryPlayer& inventory) {
 		if (i != nullptr && i->getName() == itemNames[2 + selectedBullet]) {
 			i->count--;
 			if (i->count < 1) inventory.getSlot(slot)->reset();
+			return;
 		}
 	}
 }
@@ -166,14 +167,24 @@ $hookStatic(std::unique_ptr<Entity>, Entity, instantiateEntity, const stl::strin
 	return original(entityName, id, pos, type, attributes);
 }
 
-//Right click handling
-$hook(void, Player, update, World* world, double dt, EntityPlayer* entityPlayer){
-	original(self, world,dt, entityPlayer);
+$hook(void, Player, update, World* world, double _, EntityPlayer* entityPlayer) { // dt is useless bcs its hardcoded to be 0.01
+	original(self, world, _, entityPlayer);
+	
+	// check if `self` is the local player. if not then dont do any shit // multiplayer bullshit
+	if (self != &fdm::StateGame::instanceObj->player) return;
+
+	if (self->inventoryManager.isOpen()) return;
+
+
+	static double lastTime = glfwGetTime() - 0.01;
+	double curTime = glfwGetTime();
+	double dt = curTime - lastTime;
+	lastTime = curTime;
 
 	bulletCount = getSelectedBulletCount(self->inventoryAndEquipment);
 	Item* i = self->hotbar.getSlot(self->hotbar.selectedIndex)->get();
-	bool isDeadly= (i!=nullptr && i->getName() == "Deadly Slingshot");
-	isHoldingSlingshot = (i != nullptr && i->getName()=="Slingshot" || isDeadly);
+	bool isDeadly = (i != nullptr && i->getName() == "Deadly Slingshot");
+	isHoldingSlingshot = (i != nullptr && i->getName() == "Slingshot" || isDeadly);
 
 	if (!isHoldingSlingshot) {
 		i = self->equipment.getSlot(0)->get();
@@ -181,17 +192,17 @@ $hook(void, Player, update, World* world, double dt, EntityPlayer* entityPlayer)
 		isHoldingSlingshot = (i != nullptr && i->getName() == "Slingshot" || isDeadly);
 	}
 
-	if (self->keys.rightMouseDown &&isHoldingSlingshot && bulletCount>0) {
+	if (self->keys.rightMouseDown && isHoldingSlingshot && bulletCount > 0) {
 		if (drawFraction == 0) {
 			AudioManager::playSound4D(EntityProjectile::stretchSound, EntityProjectile::voiceGroup, self->cameraPos, { 0,0,0,0 });
 		}
 		if (isDeadly)
-			drawFraction = std::min(1.0, drawFraction+dt*1.4);
+			drawFraction = std::min(1.0, drawFraction + dt * 1.4);
 		else
 			drawFraction = std::min(1.0, drawFraction + dt);
 	}
-	else if (isHoldingSlingshot && drawFraction>0 && bulletCount > 0){
-		shoot(self,world,isDeadly);
+	else if (!self->keys.rightMouseDown && isHoldingSlingshot && drawFraction > 0 && bulletCount > 0) {
+		shoot(self, world, isDeadly);
 		drawFraction = 0;
 	}
 	else {
@@ -199,11 +210,10 @@ $hook(void, Player, update, World* world, double dt, EntityPlayer* entityPlayer)
 	}
 }
 
-
 // Render UI
 $hook(void, Player, renderHud,GLFWwindow* window){
 	glDisable(GL_DEPTH_TEST);
-	if (isHoldingSlingshot && !(self->inventoryManager.secondary)) {
+	if (isHoldingSlingshot && !self->inventoryManager.isOpen()) {
 		
 		int width, height;
 		glfwGetWindowSize(window, &width, &height);
