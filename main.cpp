@@ -677,6 +677,6 @@ $hook(void, StateGame, updateProjection, int width, int height)
 
 $exec
 {
-	KeyBinds::addBind("Slingshot", "Next Bullet", glfw::Keys::R, KeyBindsScope::PLAYER, pickNextBullet);
-	KeyBinds::addBind("Slingshot", "Previous Bullet", glfw::Keys::F, KeyBindsScope::PLAYER, pickPreviousBullet);
+	KeyBinds::addBind("Slingshot Mod", "Next Bullet", glfw::Keys::R, KeyBindsScope::PLAYER, pickNextBullet);
+	KeyBinds::addBind("Slingshot Mod", "Previous Bullet", glfw::Keys::F, KeyBindsScope::PLAYER, pickPreviousBullet);
 }
