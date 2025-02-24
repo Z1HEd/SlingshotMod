@@ -114,6 +114,19 @@ void EntityProjectile::render(const World* world, const m4::Mat5& MV, bool glass
 	glUniform1fv(glGetUniformLocation(slingshotShader->id(), "MV"), sizeof(material) / sizeof(float), &material[0][0]);
 
 	ItemTool::rockRenderer->render();
+
+	if (glasses)
+	{
+		const Shader* wireframeGlassesShader = ShaderManager::get("wireframeGlassesShader");
+
+		wireframeGlassesShader->use();
+
+		glUniform1f(glGetUniformLocation(wireframeGlassesShader->id(), "wFar"), 8.0f);
+		glUniform4f(glGetUniformLocation(wireframeGlassesShader->id(), "inColor"), color.r, color.g, color.b, 1);
+		glUniform1fv(glGetUniformLocation(wireframeGlassesShader->id(), "MV"), sizeof(material) / sizeof(float), &material[0][0]);
+
+		EntitySpider::wireframeRenderer->render();
+	}
 }
 nlohmann::json EntityProjectile::saveAttributes()
 {
