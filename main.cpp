@@ -212,6 +212,7 @@ $hook(void, Player, update, World* world, double _, EntityPlayer* entityPlayer) 
 
 // Render UI
 $hook(void, Player, renderHud,GLFWwindow* window){
+	original(self, window);
 	glDisable(GL_DEPTH_TEST);
 	if (isHoldingSlingshot && !self->inventoryManager.isOpen()) {
 		
@@ -260,7 +261,7 @@ $hook(void, Player, renderHud,GLFWwindow* window){
 		ui.render();
 	}
 	glEnable(GL_DEPTH_TEST);
-	original(self, window);
+	
 }
 
 //Initialize UI  when entering world
