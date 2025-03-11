@@ -1,8 +1,5 @@
 #include "EntityProjectile.h"
 
-int EntityProjectile::nextId = 0;
-int EntityProjectile::getNextId() { return nextId++; }
-
 stl::string EntityProjectile::stretchSound="";
 stl::string EntityProjectile::slingshotSound="";
 stl::string EntityProjectile::hitSound="";

@@ -20,8 +20,6 @@ public:
 	static stl::string hitSound;
 	inline static const char* voiceGroup = "ambience";
 
-	static int nextId;
-	static int getNextId();
 
 	stl::string getName() override;
 	void update(World* world, double dt) override;
