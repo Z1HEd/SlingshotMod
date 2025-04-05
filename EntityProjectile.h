@@ -9,7 +9,7 @@ class EntityProjectile : public Entity
 public:
 	glm::vec4 position;
 	glm::vec4 linearVelocity; // In case in the future there would also be angular velocity
-	Player* ownerPlayer;
+	stl::uuid ownerPlayerId;
 	float damage;
 	float gravity = 50;
 	float timeTillVisible = 0.02;

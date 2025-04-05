@@ -16,7 +16,7 @@ void EntityProjectile::update(World* world, double dt)
 		float targetDist = FLT_MAX;
 		glm::vec4 towardsTarget{ 0 };
 
-		//world->entitiesMutex.lock(); // gotta love multi-threading
+		//world->entitiesMutex.lock();
 		for (int x = -1; x <= 1; ++x)
 			for (int z = -1; z <= 1; ++z)
 				for (int w = -1; w <= 1; ++w)
@@ -28,7 +28,7 @@ void EntityProjectile::update(World* world, double dt)
 					for (auto& entity : chunk->entities)
 					{
 						if (entity == this) continue;
-						if (entity->id == ownerPlayer->EntityPlayerID) continue;
+						if (entity->id == ownerPlayerId) continue;
 						if (entity->isBlockEntity()) continue;
 						if (entity->getName() == "Item") continue;
 						if (entity->dead) continue; //in case
@@ -59,7 +59,7 @@ void EntityProjectile::update(World* world, double dt)
 	if (glm::dot(linearVelocity, linearVelocity) < 0.001f * 0.001f) return;   // x*x + y*y + z*z + w*w is fast (which is what the dot(a,a) does here)
 	glm::vec4 newPos = position + linearVelocity * (float)dt;
 
-	Entity* intersect = world->getEntityIntersection(position, newPos, ownerPlayer->EntityPlayerID);
+	Entity* intersect = world->getEntityIntersection(position, newPos, ownerPlayerId);
 
 	glm::ivec4 blockPos = position;
 	glm::ivec4 endPos;
@@ -110,7 +110,7 @@ void EntityProjectile::render(const World* world, const m4::Mat5& MV, bool glass
 	glUniform4f(glGetUniformLocation(slingshotShader->id(), "inColor"), color.r, color.g, color.b, 1);
 	glUniform1fv(glGetUniformLocation(slingshotShader->id(), "MV"), sizeof(material) / sizeof(float), &material[0][0]);
 
-	ItemTool::rockRenderer->render();
+	ItemTool::rockRenderer.render();
 
 	if (glasses)
 	{
@@ -122,7 +122,7 @@ void EntityProjectile::render(const World* world, const m4::Mat5& MV, bool glass
 		glUniform4f(glGetUniformLocation(wireframeGlassesShader->id(), "inColor"), color.r, color.g, color.b, 1);
 		glUniform1fv(glGetUniformLocation(wireframeGlassesShader->id(), "MV"), sizeof(material) / sizeof(float), &material[0][0]);
 
-		EntitySpider::wireframeRenderer->render();
+		EntitySpider::wireframeRenderer.render();
 	}
 }
 nlohmann::json EntityProjectile::saveAttributes()
@@ -143,7 +143,7 @@ nlohmann::json EntityProjectile::getServerUpdateAttributes()
 }
 void EntityProjectile::applyServerUpdate(const nlohmann::json& j, World* world)
 {
-	linearVelocity = m4::vec4FromJson(j["linearVelocity"]);
+	linearVelocity = m4::vec4FromJson<float>(j["linearVelocity"]);
 	damage = j["damage"].get<float>();
 	type = j["type"].get<int>();
 }
@@ -159,4 +159,22 @@ bool EntityProjectile::action(World* world, Entity* actor, int action, const nlo
 {
 	//Console::printLine("Action! actor: ", actor->getName()); //Never actually prints anything, not needed i guess
 	return false;
+}
+
+//Instantiating a projectile
+$hookStatic(std::unique_ptr<Entity>, Entity, instantiateEntity, const stl::string& entityName, const stl::uuid& id, const glm::vec4& pos, const stl::string& type, const nlohmann::json& attributes)
+{
+	if (type == "projectile")
+	{
+		auto result = std::make_unique<EntityProjectile>();
+
+		result->id = id;
+		result->setPos(pos);
+		result->linearVelocity = m4::vec4FromJson<float>(attributes["linearVelocity"]);
+		result->damage = attributes["damage"];
+		result->type = attributes["type"];
+		result->ownerPlayerId = stl::uuid()(attributes["ownerPlayerId"].get<std::string>());
+		return result;
+	}
+	return original(entityName, id, pos, type, attributes);
 }

@@ -21,12 +21,30 @@
     <ClCompile Include="EntityProjectile.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ItemSlingshot.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="info.json5" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="EntityProjectile.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ItemSlingshot.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="JSONData.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FullPlayerInventory.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="JSONPacket.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

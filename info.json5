@@ -21,6 +21,6 @@ Requires 4DKeybinds.",
   externalDLLs: [
   ],
   dependencies: {
-	"tr1ngledev.4dkeybinds": "before"
+	"tr1ngledev.4dkeybinds": "? before"
   },
 }
