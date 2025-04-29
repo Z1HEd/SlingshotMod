@@ -1,7 +1,6 @@
 //#define DEBUG_CONSOLE // Uncomment this if you want a debug console to start. You can use the Console class to print. You can use Console::inStrings to get input.
 
 #include <4dm.h>
-#include "EntityProjectile.h"
 #include "4DKeyBinds.h"
 #include <glm/gtc/random.hpp>
 #include "auilib/auilib.h"
@@ -11,18 +10,11 @@
 #include "FullPlayerInventory.h"
 #include "JSONPacket.h"
 
+#include "EntityProjectile.h"
+
 using namespace fdm;
 
-std::vector<std::string> itemNames{
-	"Slingshot",
-	"Deadly Slingshot",
-	"Stone Bullet",
-	"Iron Bullet",
-	"Deadly Bullet",
-	"Solenoid Bullet"
-};
-
-inline const float maxZoom = 0.2;
+inline constexpr float maxZoom = 0.2;
 
 aui::BarIndicator drawIndicator;
 QuadRenderer qr{};
@@ -35,8 +27,8 @@ FontRenderer font{};
 // Initialize the DLLMain
 initDLL
 
-//Shooting a slingshot
-int getItemCount(Player* player,const std::string& name) {
+int getItemCount(Player* player, const stl::string& name)
+{
 	int count = 0;
 	for (int slot = 0;slot < FullPlayerInventory::getSlotCount(player); slot++) {
 		Item* i = FullPlayerInventory::getSlot(player,slot).get();
@@ -45,7 +37,9 @@ int getItemCount(Player* player,const std::string& name) {
 	}
 	return count;
 }
-void subtractItem(Player* player, const std::string& name) {
+
+void subtractItem(Player* player, const stl::string& name)
+{
 	
 	for (int slot = 0;slot < FullPlayerInventory::getSlotCount(player); slot++) {
 		Item* i = FullPlayerInventory::getSlot(player, slot).get();
@@ -57,148 +51,185 @@ void subtractItem(Player* player, const std::string& name) {
 	}
 }
 
-void shoot(World* world,const nlohmann::json& data) {
-	
+ItemSlingshot* getSlingshot(Player* player)
+{
+	ItemSlingshot* slingshot
+		= dynamic_cast<ItemSlingshot*>(player->hotbar.getSlot(player->hotbar.selectedIndex).get());
+	if (slingshot)
+	{
+		slingshot->offhand = false;
+		return slingshot;
+	}
+	else
+	{
+		slingshot = dynamic_cast<ItemSlingshot*>(player->equipment.getSlot(0).get());
+		if (slingshot)
+		{
+			slingshot->offhand = true;
+			return slingshot;
+		}
+	}
+	return nullptr;
+}
+
+void localPlayerEventJson(World* world, const stl::string& event, const nlohmann::json& data, Player* player);
+
+void handleShoot(World* world, const nlohmann::json& data)
+{
 	const glm::vec4 playerPos = m4::vec4FromJson<float>(data["playerPosition"]);
 	const glm::vec4 playerDirection = m4::vec4FromJson<float>(data["playerDirection"]);
 	const glm::vec4 playerVelocity = m4::vec4FromJson<float>(data["playerVelocity"]);
 	const stl::uuid ownerPlayerId = stl::uuid()(data["ownerPlayerId"].get<std::string>());
 	const float drawFraction = data["drawFraction"].get<float>();
 
-	constexpr float randomRange = 0.015f;
-	constexpr float randomRangeDeadly = 0.007f;
+	constexpr float randomRange = 0.012f;
+	constexpr float randomRangeDeadly = 0.006f;
 
-	Player* player = ((EntityPlayer*)world->getEntity(ownerPlayerId))->player;
+	EntityPlayer* ownerPlayerEntity = (EntityPlayer*)world->getEntity(ownerPlayerId);
+	if (!ownerPlayerEntity) return;
 
-	ItemSlingshot* slingshot;
-	slingshot = dynamic_cast<ItemSlingshot*>(player->hotbar.getSlot(player->hotbar.selectedIndex).get());
-	if (!slingshot) slingshot = dynamic_cast<ItemSlingshot*>(player->equipment.getSlot(0).get());
+	Player* player = ownerPlayerEntity->player;
+
+	ItemSlingshot* slingshot = getSlingshot(player);
 	if (!slingshot) return;
 
-	float range = slingshot->isDeadly() ? randomRangeDeadly : randomRange;
+	const float range = slingshot->isDeadly() ? randomRangeDeadly : randomRange;
 
-	glm::vec4 linearVelocity = glm::normalize(playerDirection + glm::vec4{
+	glm::vec4 velocity = glm::normalize(playerDirection + glm::vec4{
 		glm::linearRand(-range, range),
 		glm::linearRand(-range, range),
 		glm::linearRand(-range, range),
 		glm::linearRand(-range, range) });
 
-	if (slingshot->isDeadly()) linearVelocity *= 150;
-	else linearVelocity *= 100;
-	//if (selectedBullet == 3) linearVelocity *= 0.7;
+	if (slingshot->isDeadly()) velocity *= 150;
+	else velocity *= 100;
+	//if (selectedBullet == 3) velocity *= 0.7;
 
-	float clampedDrawFration = std::max(0.3f, drawFraction);
-	linearVelocity *= clampedDrawFration;
+	float clampedDrawFration = glm::clamp(drawFraction, 0.2f, 1.0f);
+	velocity *= clampedDrawFration;
 
-	linearVelocity += playerVelocity;
-	
+	velocity += playerVelocity;
 
 	nlohmann::json attributes;
-	attributes["linearVelocity"] = m4::vec4ToJson(linearVelocity);
+	attributes["velocity"] = m4::vec4ToJson(velocity);
 
 	switch (slingshot->selectedBulletType) {
-	case ItemSlingshot::BULLET_STONE:
-		attributes["damage"] = 7 * clampedDrawFration;
-		attributes["type"] = 0;
+	case EntityProjectile::BULLET_STONE:
+		attributes["damage"] = 10 * clampedDrawFration;
 		break;
-	case ItemSlingshot::BULLET_IRON:
-		attributes["damage"] = 13 * clampedDrawFration;
-		attributes["type"] = 1;
+	case EntityProjectile::BULLET_IRON:
+		attributes["damage"] = 15 * clampedDrawFration;
 		break;
-	case ItemSlingshot::BULLET_DEADLY:
-		attributes["damage"] = 23 * clampedDrawFration;
-		attributes["type"] = 2;
+	case EntityProjectile::BULLET_DEADLY:
+		attributes["damage"] = 20 * clampedDrawFration;
 		break;
-	case ItemSlingshot::BULLET_SOLENOID:
-		attributes["damage"] = 17 * clampedDrawFration;
-		attributes["type"] = 3;
+	case EntityProjectile::BULLET_SOLENOID:
+		attributes["damage"] = 15 * clampedDrawFration;
 		break;
 	}
+	attributes["type"] = (int)slingshot->selectedBulletType;
 
 	attributes["ownerPlayerId"] = stl::uuid::to_string(ownerPlayerId);
 
-	std::unique_ptr<Entity> projectile = Entity::createWithAttributes("Projectile", playerPos, attributes);
+	auto projectile = Entity::createWithAttributes("Projectile", playerPos, attributes);
 
-	Chunk * chunk=world->getChunkFromCoords(playerPos.x, playerPos.z, playerPos.w);
-	world->addEntityToChunk(projectile, chunk);
+	Chunk* chunk = world->getChunkFromCoords(playerPos.x, playerPos.z, playerPos.w);
+	if (chunk)
+		world->addEntityToChunk(projectile, chunk);
 
-	AudioManager::playSound4D(EntityProjectile::slingshotSound, EntityProjectile::voiceGroup, playerPos, { 0,0,0,0 });
+	subtractItem(player, EntityProjectile::bulletTypeNames.at(slingshot->selectedBulletType));
 
-	subtractItem(player, itemNames[slingshot->selectedBulletType + 2]);
-	//TODO: sync inventory
-	// :)
+	// Sync Inventory
+	if (world->getType() == World::TYPE_SERVER)
+	{
+		auto* server = (WorldServer*)world;
+		nlohmann::json invJson = player->saveInventory();
+		if (server->entityPlayerIDs.contains(player->EntityPlayerID))
+			server->sendMessagePlayer({ Packet::S_INVENTORY_UPDATE, invJson.dump() }, server->entityPlayerIDs.at(player->EntityPlayerID), true);
+	}
+
+	slingshot->isDrawing = false;
+	slingshot->drawFraction = 0;
 }
 
-//Handle player inputs
-$hook(void, Player, update, World* world, double _, EntityPlayer* entityPlayer) { // dt is useless bcs its hardcoded to be 0.01
-	original(self, world, _, entityPlayer);
+// Handle player inputs
+$hook(void, Player, update, World* world, double dt, EntityPlayer* entityPlayer)
+{
+	original(self, world, dt, entityPlayer);
 	
-	if (world->getType() != World::TYPE_CLIENT && world->getType() != World::TYPE_SINGLEPLAYER) return;
-	
+	if (world->getType() == World::TYPE_SERVER) return; // run on client and singleplayer
+	if (self != &StateGame::instanceObj.player) return; // only on the local player
 	if (self->inventoryManager.isOpen()) return;
 
-	static double lastTime = glfwGetTime() - 0.01;
-	double curTime = glfwGetTime();
-	double dt = curTime - lastTime;
-	lastTime = curTime;
-
-	ItemSlingshot* slingshot;
-	slingshot = dynamic_cast<ItemSlingshot*>(self->hotbar.getSlot(self->hotbar.selectedIndex).get());
-	if (!slingshot) slingshot = dynamic_cast<ItemSlingshot*>(self->equipment.getSlot(0).get());
+	ItemSlingshot* slingshot = getSlingshot(self);
 	if (!slingshot) return;
 
-	if (getItemCount(self, itemNames[slingshot->selectedBulletType + 2]) < 1) {
+	if (getItemCount(self, EntityProjectile::bulletTypeNames.at(slingshot->selectedBulletType)) == 0)
+	{
 		slingshot->drawFraction = 0;
+		slingshot->isDrawing = false;
 		return;
 	}
 
-	if (self->keys.rightMouseDown) {
-		if (slingshot->drawFraction == 0) {
-			AudioManager::playSound4D(EntityProjectile::stretchSound, EntityProjectile::voiceGroup, self->cameraPos, { 0,0,0,0 });
+	if (self->keys.rightMouseDown)
+	{
+		if (!slingshot->isDrawing)
+		{
+			EntityProjectile::playStretchSound(self->cameraPos);
+
+			localPlayerEventJson(world, JSONPacket::C_SLINGSHOT_START_DRAWING, {}, self);
 		}
-		slingshot->drawFraction =std::min(1.0, slingshot->drawFraction + dt * (slingshot->isDeadly() ? 1.4 : 1));
+
+		slingshot->drawFraction = std::min(1.0, slingshot->drawFraction + dt / (slingshot->isDeadly() ? 0.5 : 0.9));
 		slingshot->isDrawing = true;
 	}
-	else if (!self->keys.rightMouseDown && slingshot->drawFraction > 0 ) {
-		nlohmann::json data = { 
-			{"ownerPlayerId",stl::uuid::to_string(self->EntityPlayerID)},
-			{"drawFraction",slingshot->drawFraction},
-			{"playerPosition",m4::vec4ToJson(self->cameraPos)},
-			{"playerDirection",m4::vec4ToJson(self->forward)},
-			{"playerVelocity",m4::vec4ToJson(self->vel)}
-		};
-		if (world->getType() == World::TYPE_SINGLEPLAYER)
-			shoot(world, data);
+	else if (slingshot->isDrawing)
+	{
+		if (slingshot->drawFraction >= 0.1)
+		{
+			nlohmann::json data = {
+				{ "drawFraction", slingshot->drawFraction + 0.01 },
+				{ "ownerPlayerId", stl::uuid::to_string(self->EntityPlayerID) },
+				{ "playerPosition", m4::vec4ToJson(self->cameraPos) },
+				{ "playerDirection", m4::vec4ToJson(self->forward) },
+				{ "playerVelocity", m4::vec4ToJson(self->vel) }
+			};
+			EntityProjectile::playSlingshotSound(self->cameraPos);
+			localPlayerEventJson(world, JSONPacket::C_SLINGSHOT_SHOOT, data, self);
+
+			slingshot->drawFraction = 0;
+			slingshot->isDrawing = false;
+		}
 		else
-			JSONData::sendPacketServer((WorldClient*)world, JSONPacket::C_SLINGSHOT_SHOOT, data);
-		slingshot->drawFraction = 0;
+		{
+			localPlayerEventJson(world, JSONPacket::C_SLINGSHOT_CANCEL_DRAWING, {}, self);
+
+			slingshot->drawFraction = 0;
+			slingshot->isDrawing = false;
+		}
 	}
 }
 
 // Render UI
-$hook(void, Player, renderHud,GLFWwindow* window){
+$hook(void, Player, renderHud, GLFWwindow* window)
+{
 	original(self, window);
 
-	bool isSlingshotOffhand = false;
-	ItemSlingshot* slingshot;
-	slingshot = dynamic_cast<ItemSlingshot*>(self->hotbar.getSlot(self->hotbar.selectedIndex).get());
-	if (!slingshot) {
-		slingshot = dynamic_cast<ItemSlingshot*>(self->equipment.getSlot(0).get());
-		isSlingshotOffhand = true;
-	}
-	if (!slingshot || self->inventoryManager.isOpen()) return;
+	ItemSlingshot* slingshot = getSlingshot(self);
+	if (!slingshot) return;
+	if (self->inventoryManager.isOpen()) return;
 
 	glDisable(GL_DEPTH_TEST);
 		
 	int width, height;
-	glfwGetWindowSize(window, &width, &height);
+	glfwGetFramebufferSize(window, &width, &height);
 	drawIndicator.offsetX(width / 2 - 30);
 	drawIndicator.offsetY(height / 2 - 50);
 	drawIndicator.setFill(slingshot->drawFraction);
 	drawIndicator.visible = slingshot->drawFraction > 0;
 
 	int posX, posY;
-	if (!isSlingshotOffhand) {
+	if (!slingshot->offhand) {
 		posX = self->hotbar.renderPos.x + 68 /*imperfect reality*/ + 34 * ((self->hotbar.selectedIndex + 1) % 2);
 		posY = self->hotbar.renderPos.y + (self->hotbar.selectedIndex * 56);
 	}
@@ -213,21 +244,20 @@ $hook(void, Player, renderHud,GLFWwindow* window){
 	bulletBackgroundRenderer.render();
 
 	bulletRenderer.setPos(posX, posY, 72, 72);
-	bulletRenderer.setClip((slingshot->selectedBulletType + 2) * 36, 0, 36, 36);
-	if (getItemCount(self,itemNames[slingshot->selectedBulletType + 2]) > 0)
+	bulletRenderer.setClip(slingshot->selectedBulletType * 35, 36, 35, 36);
+	if (getItemCount(self, EntityProjectile::bulletTypeNames.at(slingshot->selectedBulletType)) > 0)
 		bulletRenderer.setColor(1, 1, 1, 1);
 	else
 		bulletRenderer.setColor(.2, .2, .2, 1);
 	bulletRenderer.render();
 
-	bulletCountText.text = std::to_string(getItemCount(self, itemNames[slingshot->selectedBulletType + 2]));
+	bulletCountText.text = std::to_string(getItemCount(self, EntityProjectile::bulletTypeNames.at(slingshot->selectedBulletType)));
 	bulletCountText.offsetX(posX + 40);
 	bulletCountText.offsetY(posY + 45);
 
 	ui.render();
 
 	glEnable(GL_DEPTH_TEST);
-
 }
 
 //Initialize UI  when entering world
@@ -237,7 +267,7 @@ void viewportCallback(void* user, const glm::ivec4& pos, const glm::ivec2& scrol
 
 	// update the render viewport
 	int wWidth, wHeight;
-	glfwGetWindowSize(window, &wWidth, &wHeight);
+	glfwGetFramebufferSize(window, &wWidth, &wHeight);
 	glViewport(pos.x, wHeight - pos.y - pos.w, pos.z, pos.w);
 
 	// create a 2D projection matrix from the specified dimensions and scroll position
@@ -275,7 +305,7 @@ $hook(void, StateGame, init, StateManager& s)
 	bulletBackgroundRenderer.shader = ShaderManager::get("tex2DShader");
 	bulletBackgroundRenderer.init();
 	
-	bulletRenderer.texture = ResourceManager::get("assets/Items.png", true);
+	bulletRenderer.texture = ResourceManager::get("assets/textures/items.png", true);
 	bulletRenderer.shader = ShaderManager::get("tex2DShader");
 	bulletRenderer.init();
 
@@ -293,170 +323,75 @@ $hook(void, StateGame, init, StateManager& s)
 	ui.addElement(&bulletCountText);
 	ui.addElement(&drawIndicator);
 }
-// Update FOV for zoom when aiming
-$hook(void, StateGame, render, StateManager& s) {
+
+$hook(void, StateGame, update, StateManager& s, double dt)
+{
+	utils::update_time = glfwGetTime();
+	utils::update_dt = glm::min(utils::update_time - utils::update_lastTime, 0.1);
+	utils::update_lastTime = utils::update_time;
+
+	original(self, s, dt);
+}
+
+$hook(void, StateGame, render, StateManager& s)
+{
+	utils::render_time = glfwGetTime();
+	utils::render_dt = glm::min(utils::render_time - utils::render_lastTime, 0.1);
+	utils::render_lastTime = utils::render_time;
+
 	original(self, s);
-	static double lastTime = glfwGetTime() - 0.01;
-	double dt = glfwGetTime() - lastTime;
-	lastTime = glfwGetTime();
 
 	if (self->player.inventoryManager.isOpen()) return;
 
-	ItemSlingshot* slingshot;
-	slingshot = dynamic_cast<ItemSlingshot*>(self->player.hotbar.getSlot(self->player.hotbar.selectedIndex).get());
-	if (!slingshot) slingshot = dynamic_cast<ItemSlingshot*>(self->player.equipment.getSlot(0).get());
+	ItemSlingshot* slingshot = getSlingshot(&self->player);
 	if (!slingshot) return;
 
-	if (slingshot->drawFraction > 0) {
+	if (slingshot->isDrawing) {
 		self->FOV = utils::lerp(StateSettings::instanceObj.currentFOV+30, (StateSettings::instanceObj.currentFOV + 30) - (StateSettings::instanceObj.currentFOV + 30) * maxZoom, utils::easeInOutQuad(slingshot->drawFraction));
 		int width, height;
-		glfwGetWindowSize(s.window,&width, &height);
+		glfwGetFramebufferSize(s.window,&width, &height);
 		self->updateProjection(glm::max(width, 1), glm::max(height, 1));
 	}
 	else {
-		self->FOV = utils::ilerp(self->FOV, StateSettings::instanceObj.currentFOV + 30, 0.38f, dt);
+		self->FOV = utils::ilerp(self->FOV, StateSettings::instanceObj.currentFOV + 30, 0.38f, utils::render_dt);
 		int width, height;
-		glfwGetWindowSize(s.window, &width, &height);
+		glfwGetFramebufferSize(s.window, &width, &height);
 		self->updateProjection(glm::max(width, 1), glm::max(height, 1));
 	}
 }
 
-// item slot material (probably shouldve made a seperate array of names for it but im too lazy to change it)
-// Im still too lazy to change it
-$hook(void, ItemMaterial, render, const glm::ivec2& pos)
+$hook(void, WorldServer, WorldServer, const stl::path& worldsPath, const stl::path& settingsPath, const stl::path& biomeInfoPath)
 {
-	int index = std::find(itemNames.begin(), itemNames.end(), self->name) - itemNames.begin();
-	if (index == itemNames.size())
-		return original(self, pos);
-
-	TexRenderer& tr = ItemTool::tr; // or TexRenderer& tr = ItemTool::tr; after 0.3
-	const Tex2D* ogTex = tr.texture; // remember the original texture
-
-	tr.texture = ResourceManager::get("assets/Items.png", true); // set to custom texture
-	tr.setClip(index * 36, 0, 36, 36);
-	tr.setPos(pos.x, pos.y, 70, 72);
-	tr.render();
-
-	tr.texture = ogTex; // return to the original texture
-}
-
-$hook(bool, ItemMaterial, isDeadly)
-{
-	if (self->name == "Deadly Bullet")
-		return true;
-	return original(self);
-}
-
-// Add recipes
-$hookStatic(void, CraftingMenu, loadRecipes)
-{
-	static bool recipesLoaded = false;
-
-	if (recipesLoaded) return;
-
-	recipesLoaded = true;
-
-	original();
-
-	CraftingMenu::recipes.push_back(
-		nlohmann::json{
-		{"recipe", {{{"name", "Stick"}, {"count", 3}},{{"name", "Hypersilk"}, {"count", 3}}}},
-		{"result", {{"name", itemNames[0]}, {"count", 1}}}
-		}
-	);
-	CraftingMenu::recipes.push_back(
-		nlohmann::json{
-		{"recipe", {{{"name", "Deadly Bars"}, {"count", 3}},{{"name", "Hypersilk"}, {"count", 3}}}},
-		{"result", {{"name", itemNames[1]}, {"count", 1}}}
-		}
-	);
-	
-	CraftingMenu::recipes.push_back(
-		nlohmann::json{
-		{"recipe", {{{"name", "Rock"}, {"count", 1}}}},
-		{"result", {{"name", itemNames[2]}, {"count", 3}}}
-		}
-	);
-	CraftingMenu::recipes.push_back(
-		nlohmann::json{
-		{"recipe", {{{"name", "Iron Bars"}, {"count", 1}}}},
-		{"result", {{"name", itemNames[3]}, {"count", 9}}}
-		}
-	);
-	CraftingMenu::recipes.push_back(
-		nlohmann::json{
-		{"recipe", {{{"name", "Deadly Bars"}, {"count", 1}}}},
-		{"result", {{"name", itemNames[4]}, {"count", 6}}}
-		}
-	);
-	CraftingMenu::recipes.push_back(
-		nlohmann::json{
-		{"recipe", {{{"name", "Solenoid Bars"}, {"count", 1}}}},
-		{"result", {{"name", itemNames[5]}, {"count", 6}}}
-		}
-	);
-	
-}
-
-void initEntityBlueprints() {
-	(Entity::blueprints)["Projectile"] =
-	{
-		{ "type", "projectile" },
-		{ "baseAttributes",
-			{
-				{"type", 0},
-				{"linearVelocity", {0.0f, 0.0f, 0.0f, 0.0f}},
-				{"damage", 0.0f},
-				{"ownerPlayerId",""}
-			}
-		}
-	};
-}
-
-void initItemBlueprints()
-{
-	for (int i = 0;i < 2; i++) {
-		// add the custom item
-		(Item::blueprints)[itemNames[i]] =
+	// register networking callbacks
+	JSONData::CSaddPacketCallback(JSONPacket::C_SLINGSHOT_SHOOT, [](WorldServer* world, double dt, const nlohmann::json& data, uint32_t client)
 		{
-		{ "type", "slingshot" },
-		{ "baseAttributes", {{"isSelectedBulletDeadly",false}}}
-		};
-	}
-	for (int i = 2;i < itemNames.size(); i++) {
-		// add the custom item
-		(Item::blueprints)[itemNames[i]] =
+			if (!world->players.contains(client)) return;
+
+			localPlayerEventJson(world, JSONPacket::C_SLINGSHOT_SHOOT, data, world->players.at(client).player.get());
+		});
+
+	JSONData::CSaddPacketCallback(JSONPacket::C_SLINGSHOT_UPDATE, [](WorldServer* world, double dt, const nlohmann::json& data, uint32_t client)
 		{
-		{ "type", "material" }, // based on ItemMaterial
-		{ "baseAttributes", nlohmann::json::object() } // no attributes
-		};
-	}
-}
+			if (!world->players.contains(client)) return;
 
-// Init stuff - server
+			localPlayerEventJson(world, JSONPacket::C_SLINGSHOT_UPDATE, data, world->players.at(client).player.get());
+		});
 
-void onPlayerShoot(fdm::WorldServer* world, double dt, const nlohmann::json& data, uint32_t client) {
-	auto& playerInfo = world->players.at(client);
-	shoot(world, data);
-}
+	JSONData::CSaddPacketCallback(JSONPacket::C_SLINGSHOT_START_DRAWING, [](WorldServer* world, double dt, const nlohmann::json& data, uint32_t client)
+		{
+			if (!world->players.contains(client)) return;
 
-$hook(void, WorldServer, WorldServer, const stl::path& worldsPath, const stl::path& settingsPath, const stl::path& biomeInfoPath) {
+			localPlayerEventJson(world, JSONPacket::C_SLINGSHOT_START_DRAWING, data, world->players.at(client).player.get());
+		});
+
+	JSONData::CSaddPacketCallback(JSONPacket::C_SLINGSHOT_CANCEL_DRAWING, [](WorldServer* world, double dt, const nlohmann::json& data, uint32_t client)
+		{
+			if (!world->players.contains(client)) return;
+
+			localPlayerEventJson(world, JSONPacket::C_SLINGSHOT_CANCEL_DRAWING, data, world->players.at(client).player.get());
+		});
+
 	original(self, worldsPath, settingsPath, biomeInfoPath);
-	
-	initItemBlueprints();
-	initEntityBlueprints();
-
-	JSONData::CSaddPacketCallback(JSONPacket::C_SLINGSHOT_SHOOT, onPlayerShoot);
-}
-
-// Init stuff - client
-
-$hook(void, StateGame, init,StateManager& s) {
-	original(self, s);
-
-	initEntityBlueprints();
-
-	JSONData::CSaddPacketCallback(JSONPacket::C_SLINGSHOT_SHOOT, onPlayerShoot);
 }
 
 $hook(void, StateIntro, init, StateManager& s)
@@ -467,62 +402,193 @@ $hook(void, StateIntro, init, StateManager& s)
 	glewInit();
 	glfwInit();
 
-	initItemBlueprints();
+	EntityProjectile::soundInit();
+	EntityProjectile::renderInit();
+	ItemSlingshot::renderInit();
 
-	EntityProjectile::stretchSound = std::format("../../{}/assets/StretchSound.ogg", fdm::getModPath(fdm::modID));
-	EntityProjectile::slingshotSound = std::format("../../{}/assets/Slingshot.ogg", fdm::getModPath(fdm::modID));
-	EntityProjectile::hitSound = std::format("../../{}/assets/Hit.ogg", fdm::getModPath(fdm::modID));
+	// register networking callbacks
+	JSONData::SCaddPacketCallback(JSONPacket::S_SLINGSHOT_START_DRAWING, [](WorldClient* world, Player* player, const nlohmann::json& data)
+		{
+			Entity* e = world->getEntity(stl::uuid()(data["player"].get<std::string>()));
+			if (!e) return;
+			if (e->getName() != "Player") return;
 
-	if (!AudioManager::loadSound(EntityProjectile::stretchSound)) Console::printLine("Cannot load sound (skill issue)");
-	if (!AudioManager::loadSound(EntityProjectile::slingshotSound)) Console::printLine("Cannot load sound (skill issue)");
-	if (!AudioManager::loadSound(EntityProjectile::hitSound)) Console::printLine("Cannot load sound (skill issue)");
+			ItemSlingshot* slingshot = getSlingshot(((EntityPlayer*)e)->player);
+			if (!slingshot) return;
 
-	ShaderManager::load("projectileShader", "../../assets/shaders/tetNormal.vs", "assets/projectile.fs", "../../assets/shaders/tetNormal.gs");
+			slingshot->isDrawing = true;
+
+			EntityProjectile::playStretchSound(e->getPos());
+		});
+
+	JSONData::SCaddPacketCallback(JSONPacket::S_SLINGSHOT_STOP_DRAWING, [](WorldClient* world, Player* player, const nlohmann::json& data)
+		{
+			Entity* e = world->getEntity(stl::uuid()(data["player"].get<std::string>()));
+			if (!e) return;
+			if (e->getName() != "Player") return;
+
+			ItemSlingshot* slingshot = getSlingshot(((EntityPlayer*)e)->player);
+			if (!slingshot) return;
+
+			slingshot->isDrawing = false;
+			slingshot->drawFraction = 0;
+
+			if (data.contains("cancel"))
+				EntityProjectile::playSlingshotSound(e->getPos());
+		});
 }
 
-// Shader doesnt work without it
-$hook(void, StateGame, updateProjection, int width, int height)
+void localPlayerEventJson(World* world, const stl::string& event, const nlohmann::json& data, Player* player)
 {
-	original(self, width, height);
-	
-	const Shader* sh = ShaderManager::get("projectileShader");
-	sh->use();
-	glUniformMatrix4fv(glGetUniformLocation(sh->id(), "P"), 1, false, &self->projection3D[0][0]);
+	if (world->getType() == World::TYPE_CLIENT)
+		return JSONData::sendPacketServer((WorldClient*)world, event, data);
+
+	// "Can we have switch/case with strings?"
+	// "We already have switch/case with strings at home"
+	// switch/case with strings at home:
+	static const std::unordered_map<stl::string, void(*)(World* world, const nlohmann::json& data, Player* player)> eventHandlers
+	{
+		{ JSONPacket::C_SLINGSHOT_SHOOT, [](World* world, const nlohmann::json& data, Player* player)
+		{
+			handleShoot(world, data);
+			
+			if (world->getType() == World::TYPE_SERVER)
+			{
+				auto* server = (WorldServer*)world;
+
+				if (server->entityPlayerIDs.contains(player->EntityPlayerID))
+				{
+					auto* playerInfo = server->entityPlayerIDs.at(player->EntityPlayerID);
+
+					for (auto& c : playerInfo->chunkList)
+					{
+						for (auto& e : c->entities)
+						{
+							if (e->id != player->EntityPlayerID && e->getName() == "Player" && server->entityPlayerIDs.contains(e->id))
+							{
+								JSONData::sendPacketClient(server, JSONPacket::S_SLINGSHOT_STOP_DRAWING,
+									{
+										{ "player", stl::uuid::to_string(player->EntityPlayerID) }
+									},
+									server->entityPlayerIDs.at(e->id)->handle);
+							}
+						}
+					}
+				}
+			}
+		}
+		},
+		{ JSONPacket::C_SLINGSHOT_CANCEL_DRAWING, [](World* world, const nlohmann::json& data, Player* player)
+		{
+			if (world->getType() == World::TYPE_SERVER)
+			{
+				auto* server = (WorldServer*)world;
+
+				if (server->entityPlayerIDs.contains(player->EntityPlayerID))
+				{
+					auto* playerInfo = server->entityPlayerIDs.at(player->EntityPlayerID);
+
+					for (auto& c : playerInfo->chunkList)
+					{
+						for (auto& e : c->entities)
+						{
+							if (e->id != player->EntityPlayerID && e->getName() == "Player" && server->entityPlayerIDs.contains(e->id))
+							{
+								JSONData::sendPacketClient(server, JSONPacket::S_SLINGSHOT_STOP_DRAWING,
+									{
+										{ "player", stl::uuid::to_string(player->EntityPlayerID) },
+										{ "cancel", true }
+									},
+									server->entityPlayerIDs.at(e->id)->handle);
+							}
+						}
+					}
+				}
+			}
+		}
+		},
+		{ JSONPacket::C_SLINGSHOT_START_DRAWING, [](World* world, const nlohmann::json& data, Player* player)
+		{
+			ItemSlingshot* slingshot = getSlingshot(player);
+			if (!slingshot) return;
+
+			slingshot->isDrawing = true;
+
+			if (world->getType() == World::TYPE_SERVER)
+			{
+				auto* server = (WorldServer*)world;
+
+				if (server->entityPlayerIDs.contains(player->EntityPlayerID))
+				{
+					auto* playerInfo = server->entityPlayerIDs.at(player->EntityPlayerID);
+
+					for (auto& c : playerInfo->chunkList)
+					{
+						for (auto& e : c->entities)
+						{
+							if (e->id != player->EntityPlayerID && e->getName() == "Player" && server->entityPlayerIDs.contains(e->id))
+							{
+								JSONData::sendPacketClient(server, JSONPacket::S_SLINGSHOT_START_DRAWING,
+									{
+										{ "player", stl::uuid::to_string(player->EntityPlayerID) }
+									},
+									server->entityPlayerIDs.at(e->id)->handle);
+							}
+						}
+					}
+				}
+			}
+		}
+		},
+		{ JSONPacket::C_SLINGSHOT_UPDATE, [](World* world, const nlohmann::json& data, Player* player)
+		{
+			ItemSlingshot* slingshot = getSlingshot(player);
+			if (!slingshot) return;
+
+			slingshot->selectedBulletType = (EntityProjectile::BulletType)(data["selectedBulletType"].get<int>());
+		}
+		}
+	};
+
+	if (eventHandlers.contains(event))
+		eventHandlers.at(event)(world, data, player);
 }
 
+void changeBulletType(Player* player, int change = 1)
+{
+	if (!player) return;
 
-//KeyBinds
+	ItemSlingshot* slingshot = getSlingshot(player);
+	if (!slingshot) return;
+
+	slingshot->selectedBulletType = (EntityProjectile::BulletType)(((uint8_t)(slingshot->selectedBulletType + change)) % EntityProjectile::BULLET_TYPE_COUNT);
+
+	localPlayerEventJson(StateGame::instanceObj.world.get(), JSONPacket::C_SLINGSHOT_UPDATE,
+		{
+			{ "selectedBulletType", slingshot->selectedBulletType }
+		},
+		player);
+}
+
 void pickNextBullet(GLFWwindow* window, int action, int mods)
 {
 	Player* player = &StateGame::instanceObj.player;
-	if (action != GLFW_PRESS || player == nullptr || player->inventoryManager.isOpen()) return;
+	if (action != GLFW_PRESS || !player || player->inventoryManager.isOpen()) return;
 
-	ItemSlingshot* slingshot;
-	slingshot = dynamic_cast<ItemSlingshot*>(player->hotbar.getSlot(player->hotbar.selectedIndex).get());
-	if (!slingshot) slingshot = dynamic_cast<ItemSlingshot*>(player->equipment.getSlot(0).get());
-	if (!slingshot) return;
-
-	slingshot->selectedBulletType = (ItemSlingshot::BulletType) ((slingshot->selectedBulletType + 1) % 4);
+	changeBulletType(player, 1);
 }
 
 void pickPreviousBullet(GLFWwindow* window, int action, int mods)
 {
 	Player* player = &StateGame::instanceObj.player;
-	if (action != GLFW_PRESS || player == nullptr || player->inventoryManager.isOpen()) return;
+	if (action != GLFW_PRESS || !player || player->inventoryManager.isOpen()) return;
 
-	ItemSlingshot* slingshot;
-	slingshot = dynamic_cast<ItemSlingshot*>(player->hotbar.getSlot(player->hotbar.selectedIndex).get());
-	if (!slingshot) slingshot = dynamic_cast<ItemSlingshot*>(player->equipment.getSlot(0).get());
-	if (!slingshot) return;
-
-	slingshot->selectedBulletType = (ItemSlingshot::BulletType)(slingshot->selectedBulletType - 1);
-	if (slingshot->selectedBulletType < 0) slingshot->selectedBulletType = ItemSlingshot::BULLET_SOLENOID;
+	changeBulletType(player, -1);
 }
-
 
 $hook(bool, Player, keyInput, GLFWwindow* window, World* world, int key, int scancode, int action, int mods)
 {
-	if (!KeyBinds::isLoaded() && action == GLFW_PRESS && !self->inventoryManager.isOpen())
+	if (!KeyBinds::isLoaded() && action == GLFW_PRESS)
 	{
 		switch (key)
 		{
@@ -538,8 +604,63 @@ $hook(bool, Player, keyInput, GLFWwindow* window, World* world, int key, int sca
 	return original(self, window, world, key, scancode, action, mods);
 }
 
+// reset drawing on hotbar slot switch
+void localPlayerEvent(World* world, Player* player, Packet::ClientPacket eventType, int64_t eventValue, void* data)
+{
+	if (eventType == Packet::ClientPacket::C_HOTBAR_SLOT_SELECT)
+	{
+		ItemSlingshot* slingshot = getSlingshot(player);
+		if (slingshot)
+		{
+			slingshot->isDrawing = false;
+			slingshot->drawFraction = 0;
+
+			if (world->getType() == World::TYPE_SERVER)
+			{
+				auto* server = (WorldServer*)world;
+
+				if (server->entityPlayerIDs.contains(player->EntityPlayerID))
+				{
+					auto* playerInfo = server->entityPlayerIDs.at(player->EntityPlayerID);
+
+					for (auto& c : playerInfo->chunkList)
+					{
+						for (auto& e : c->entities)
+						{
+							if (e->id != player->EntityPlayerID && e->getName() == "Player" && server->entityPlayerIDs.contains(e->id))
+							{
+								JSONData::sendPacketClient(server, JSONPacket::S_SLINGSHOT_STOP_DRAWING,
+									{
+										{ "player", stl::uuid::to_string(player->EntityPlayerID) },
+										{ "cancel", true }
+									},
+									server->entityPlayerIDs.at(e->id)->handle);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+$hook(void, WorldClient, localPlayerEvent, Player* player, Packet::ClientPacket eventType, int64_t eventValue, void* data)
+{
+	original(self, player, eventType, eventValue, data);
+	localPlayerEvent(self, player, eventType, eventValue, data);
+}
+$hook(void, WorldServer, localPlayerEvent, Player* player, Packet::ClientPacket eventType, int64_t eventValue, void* data)
+{
+	original(self, player, eventType, eventValue, data);
+	localPlayerEvent(self, player, eventType, eventValue, data);
+}
+$hook(void, WorldSingleplayer, localPlayerEvent, Player* player, Packet::ClientPacket eventType, int64_t eventValue, void* data)
+{
+	original(self, player, eventType, eventValue, data);
+	localPlayerEvent(self, player, eventType, eventValue, data);
+}
+
 $exec
 {
-	KeyBinds::addBind("Slingshot Mod", "Next Bullet", glfw::Keys::R, KeyBindsScope::PLAYER, pickNextBullet);
-	KeyBinds::addBind("Slingshot Mod", "Previous Bullet", glfw::Keys::F, KeyBindsScope::PLAYER, pickPreviousBullet);
+	KeyBinds::addBind("Slingshots", "Next Bullet", glfw::Keys::R, KeyBindsScope::PLAYER, pickNextBullet);
+	KeyBinds::addBind("Slingshots", "Previous Bullet", glfw::Keys::F, KeyBindsScope::PLAYER, pickPreviousBullet);
 }

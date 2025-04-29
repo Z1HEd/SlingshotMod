@@ -1,26 +1,15 @@
 {
   id: "zihed.slingshot",
-  name: "Slingshot",
+  name: "Slingshots",
   author: "ZiHEd, Tr1NgleDev",
-  description: "This is a first mod to add shooting weapons to the game: Slingshot, which can be crafted with \n \
-3 sticks and 3 hypersilk, and deadly slingshot, which can be crafted with 3 deadly Bars and 3 hypersilk.
-Hold right mouse button to draw a slingshot (which can be held both in main and offhand),\n \
-and release to shoot.\n \
-Shooting before the slingshot is completely drawn will deal less damage.\n \
-Deadly slingshot is more accurate, shoots faster and farther. 
-There are 4 types of bullets: Stone, Iron, Deadly and Solenoid, crafted out of their respective materials.\n \
-Each of the first 3 bullets have more damage than the previous, Deadly bullet dealing the most damage.\n \
-Solenoid bullet has less damage than Deadly, but it has a special property:\n \
-it is attracted to nearby entities, including those that are outside your slice of the world.\n \
-To change between types of bullets press R and F keys.
-If two slingshots are held at the same time only the main hand one will shoot.
-Requires 4DKeybinds.",
-  version: "1.0",
+  descriptionFile: "description.txt",
+  version: "2.0",
   gameVersion: "0.2.1.4",
   modDLL: "4DMod.dll",
   externalDLLs: [
   ],
   dependencies: {
-	"tr1ngledev.4dkeybinds": "? before"
+	"tr1ngledev.4dkeybinds": "? before",
+	"tr1ngledev.json-data": "before"
   },
 }

@@ -39,31 +39,31 @@ namespace JSONData
 			(packet, callback);
 	}
 	// client-side
-	inline void sendPacketAll(fdm::WorldClient* world, const fdm::stl::string& packet, const nlohmann::json& data)
+	inline void sendPacketAll(fdm::WorldClient* world, const fdm::stl::string& packet, const nlohmann::json& data, bool reliable = true)
 	{
 		if (!isLoaded())
 			return;
-		reinterpret_cast<void(__stdcall*)(fdm::WorldClient * world, const fdm::stl::string & packet, const nlohmann::json & data)>
+		reinterpret_cast<void(__stdcall*)(fdm::WorldClient * world, const fdm::stl::string & packet, const nlohmann::json & data, bool)>
 			(fdm::getModFuncPointer(id, "sendPacketAll"))
-			(world, packet, data);
+			(world, packet, data, reliable);
 	}
 	// client-side
-	inline void sendPacketSpecific(fdm::WorldClient* world, const fdm::stl::string& packet, const nlohmann::json& data, const fdm::stl::uuid& target)
+	inline void sendPacketSpecific(fdm::WorldClient* world, const fdm::stl::string& packet, const nlohmann::json& data, const fdm::stl::uuid& target, bool reliable = true)
 	{
 		if (!isLoaded())
 			return;
-		reinterpret_cast<void(__stdcall*)(fdm::WorldClient * world, const fdm::stl::string & packet, const nlohmann::json & data, const fdm::stl::uuid & target)>
+		reinterpret_cast<void(__stdcall*)(fdm::WorldClient * world, const fdm::stl::string & packet, const nlohmann::json & data, const fdm::stl::uuid & target, bool)>
 			(fdm::getModFuncPointer(id, "sendPacketSpecific"))
-			(world, packet, data, target);
+			(world, packet, data, target, reliable);
 	}
 	// client-side
-	inline void sendPacketAllExcept(fdm::WorldClient* world, const fdm::stl::string& packet, const nlohmann::json& data, const fdm::stl::uuid& target)
+	inline void sendPacketAllExcept(fdm::WorldClient* world, const fdm::stl::string& packet, const nlohmann::json& data, const fdm::stl::uuid& target, bool reliable = true)
 	{
 		if (!isLoaded())
 			return;
-		reinterpret_cast<void(__stdcall*)(fdm::WorldClient * world, const fdm::stl::string & packet, const nlohmann::json & data, const fdm::stl::uuid & target)>
+		reinterpret_cast<void(__stdcall*)(fdm::WorldClient * world, const fdm::stl::string & packet, const nlohmann::json & data, const fdm::stl::uuid & target, bool)>
 			(fdm::getModFuncPointer(id, "sendPacketAllExcept"))
-			(world, packet, data, target);
+			(world, packet, data, target, reliable);
 	}
 
 	// server-side
@@ -85,13 +85,13 @@ namespace JSONData
 			(packet, callback);
 	}
 	// client-side
-	inline void sendPacketServer(fdm::WorldClient* world, const fdm::stl::string& packet, const nlohmann::json& data)
+	inline void sendPacketServer(fdm::WorldClient* world, const fdm::stl::string& packet, const nlohmann::json& data, bool reliable = true)
 	{
 		if (!isLoaded())
 			return;
-		reinterpret_cast<void(__stdcall*)(fdm::WorldClient * world, const fdm::stl::string & packet, const nlohmann::json & data)>
+		reinterpret_cast<void(__stdcall*)(fdm::WorldClient * world, const fdm::stl::string & packet, const nlohmann::json & data, bool)>
 			(fdm::getModFuncPointer(id, "sendPacketServer"))
-			(world, packet, data);
+			(world, packet, data, reliable);
 	}
 
 	// client-side
@@ -113,21 +113,21 @@ namespace JSONData
 			(packet, callback);
 	}
 	// server-side
-	inline void sendPacketClient(fdm::WorldServer* world, const fdm::stl::string& packet, const nlohmann::json& data, uint32_t client)
+	inline void sendPacketClient(fdm::WorldServer* world, const fdm::stl::string& packet, const nlohmann::json& data, uint32_t client, bool reliable = true)
 	{
 		if (!isLoaded())
 			return;
-		reinterpret_cast<void(__stdcall*)(fdm::WorldServer * world, const fdm::stl::string & packet, const nlohmann::json & data, uint32_t)>
+		reinterpret_cast<void(__stdcall*)(fdm::WorldServer * world, const fdm::stl::string & packet, const nlohmann::json & data, uint32_t, bool)>
 			(fdm::getModFuncPointer(id, "sendPacketClient"))
-			(world, packet, data, client);
+			(world, packet, data, client, reliable);
 	}
 	// server-side
-	inline void broadcastPacket(fdm::WorldServer* world, const fdm::stl::string& packet, const nlohmann::json& data)
+	inline void broadcastPacket(fdm::WorldServer* world, const fdm::stl::string& packet, const nlohmann::json& data, bool reliable = true)
 	{
 		if (!isLoaded())
 			return;
-		reinterpret_cast<void(__stdcall*)(fdm::WorldServer * world, const fdm::stl::string & packet, const nlohmann::json & data)>
+		reinterpret_cast<void(__stdcall*)(fdm::WorldServer * world, const fdm::stl::string & packet, const nlohmann::json & data, bool)>
 			(fdm::getModFuncPointer(id, "broadcastPacket"))
-			(world, packet, data);
+			(world, packet, data, reliable);
 	}
 }

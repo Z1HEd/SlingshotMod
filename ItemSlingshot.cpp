@@ -1,177 +1,120 @@
 #include "ItemSlingshot.h"
 #include "utils.h"
+#include <4do/4do.h>
 
 using namespace utils;
 
+MeshRenderer ItemSlingshot::renderer{};
+const Shader* ItemSlingshot::slingshotShader = nullptr;
+MeshRenderer ItemSlingshot::stringRenderer{};
+const Shader* ItemSlingshot::stringShader = nullptr;
+
 bool ItemSlingshot::isCompatible(const std::unique_ptr<Item>& other)
 {
-	return dynamic_cast<ItemSlingshot*>(other.get());
+	auto* otherSlingshot = dynamic_cast<ItemSlingshot*>(other.get());
+	return otherSlingshot && otherSlingshot->type == type;
 }
 
 stl::string ItemSlingshot::getName() {
-	return isDeadly() ? "Deadly Slingshot" : "Slingshot";
+	return slingshotTypeNames.at(type);
 }
 
 bool ItemSlingshot::isDeadly() {
-	return type==TYPE_DEADLY;
+	return type == TYPE_DEADLY;
 }
 uint32_t ItemSlingshot::getStackLimit() {
 	return 1;
 }
 
 void ItemSlingshot::render(const glm::ivec2& pos) {
-	TexRenderer& tr = ItemTool::tr; // or TexRenderer& tr = ItemTool::tr; after 0.3
+	TexRenderer& tr = ItemTool::tr;
 	const Tex2D* ogTex = tr.texture; // remember the original texture
 
-	tr.texture = ResourceManager::get("assets/Items.png", true); // set to custom texture
-	tr.setClip(type==TYPE_WOOD? 0:36, 0, 36, 36);
+	tr.texture = ResourceManager::get("assets/textures/items.png", true); // set to custom texture
+	tr.setClip(type * 35, 0, 35, 36);
 	tr.setPos(pos.x, pos.y, 70, 72);
 	tr.render();
 
 	tr.texture = ogTex; // return to the original texture
 }
 
-void ItemSlingshot::renderEntity(const m4::Mat5& MV, bool inHand, const glm::vec4& lightDir) {
-	static glm::vec4 savedOffset;
-	static float savedRotation;
-	
-	glm::vec4 goalOffset;
-	float goalRotation;
+void ItemSlingshot::renderEntity(const m4::Mat5& MV, bool inHand, const glm::vec4& lightDir)
+{	
+	glm::vec4 goalOffset{ 0 };
+	float goalRotation = 0;
 
-	if (inHand) {
+	if (!offhand)
+	{
 		goalRotation = -glm::pi<float>() / 8.0f;
 		goalOffset = glm::vec4{ -1.0f, 0, 0, 0 };
 	}
-	else {
+	else
+	{
 		goalRotation = glm::pi<float>() / 8.0f;
 		goalOffset = glm::vec4{ 1.0f, 0, 0, 0 };
 	}
 
-	BlockInfo::TYPE handleType;
-	if (isDeadly())
-		handleType = BlockInfo::MIDNIGHT_LEAF; // Looks bad, but thats the best texture i found
-	else
-		handleType = BlockInfo::WOOD;
-
-	static double lastTime = glfwGetTime() - 0.01;
-	double dt = glfwGetTime() - lastTime;
-	lastTime = glfwGetTime();
-
 	glm::vec4 offset{ 0 };
 	float rot = 0;
 
-	if (isDrawing) {
-		offset = savedOffset = lerp(glm::vec4{ 0 }, goalOffset, easeInOutQuad(drawFraction));
-		rot = savedRotation = lerp(0.0f, goalRotation, easeInOutQuad(drawFraction));
-	}
-	else {
-		offset = savedOffset = ilerp(savedOffset, glm::vec4{ 0 }, 0.3f, dt);
-		rot = savedRotation = ilerp(savedRotation, 0.0f, 0.35f, dt);
+	if (inHand)
+	{
+		if (isDrawing) {
+			offset = savedOffset = lerp(glm::vec4{ 0 }, goalOffset, easeInOutQuad(drawFraction));
+			rot = savedRotation = lerp(0.0f, goalRotation, easeInOutQuad(drawFraction));
+		}
+		else {
+			offset = savedOffset = ilerp(savedOffset, glm::vec4{ 0 }, 0.3f, utils::render_dt);
+			rot = savedRotation = ilerp(savedRotation, 0.0f, 0.35f, utils::render_dt);
+		}
 	}
 
-	glm::vec3 colorDeadly;
-	glm::vec3 colorString;
-	colorDeadly = glm::vec3{ 0.7f };
-	colorString = glm::vec3{ 0.9f,0.9f,1, };
+	constexpr glm::vec3 colors[EntityProjectile::BULLET_TYPE_COUNT]
+	{
+		glm::vec3{ 240 / 255.0f, 253 / 255.0f, 255 / 255.0f },
+		glm::vec3{ 0.7f }
+	};
 	m4::Rotor rotor = m4::Rotor
 	(
 		{
-			m4::wedge({1, 0, 0, 0}, {0, 1, 0, 0}), // XY
+			m4::BiVector4{ 1,0,0,0,0,0 }, // XY
 			rot
 		}
 	);
 
-	m4::Mat5 handleMat = MV;
-	handleMat *= rotor;
-	handleMat.translate(glm::vec4{ 0, -0.2f, 0, 0 });
-	handleMat.translate(offset);
-	handleMat.scale(glm::vec4(0.2f, 1.3f, 0.2f, 0.2f));
-	handleMat.translate(glm::vec4{ -0.5f, -0.5f, -0.5f, -0.5f });
+	{
+		m4::Mat5 mat = MV;
+		mat *= rotor;
+		mat.translate(offset);
+		//mat *= m4::Rotor{ m4::BiVector4{ 0,0,0,0,0,1 }, glm::pi<float>() * 0.5f }; // xyw test
+		mat.scale(glm::vec4{ 0.4f });
+		mat.translate(glm::vec4{ 0, (inHand ? -2.5f : 0), 0, 0.0001f });
 
-	m4::Mat5 connectorMat = MV;
-	connectorMat *= rotor;
-	connectorMat.translate(glm::vec4{ 0, .55, 0, 0 });
-	connectorMat.translate(offset);
-	connectorMat.scale(glm::vec4(.6, 0.2f, 0.2f, 0.2f));
-	connectorMat *= m4::Mat5(m4::Rotor({ m4::wedge({1, 0, 0, 0}, {0, 1, 0, 0}), glm::pi<float>() / 2 }));
-	connectorMat.translate(glm::vec4{ -0.5f, -0.5f, -0.5f, -0.5f });
+		slingshotShader->use();
+		glUniform4fv(glGetUniformLocation(slingshotShader->id(), "lightDir"), 1, &lightDir[0]);
+		glUniform1fv(glGetUniformLocation(slingshotShader->id(), "MV"), sizeof(m4::Mat5) / sizeof(float), &mat[0][0]);
+		glUniform1i(glGetUniformLocation(slingshotShader->id(), "type"), type);
 
-	m4::Mat5 leftMat = MV;
-	leftMat *= rotor;
-	leftMat.translate(glm::vec4{ .4, .95, 0, 0 });
-	leftMat.translate(offset);
-	leftMat.scale(glm::vec4(.2, 1, 0.2f, 0.2f));
-	leftMat.translate(glm::vec4{ -0.5f, -0.5f, -0.5f, -0.5f });
+		renderer.render();
+	}
 
-	m4::Mat5 rightMat = MV;
-	rightMat *= rotor;
-	rightMat.translate(glm::vec4{ -.4, .95, 0, 0 });
-	rightMat.translate(offset);
-	rightMat.scale(glm::vec4(.2, 1, 0.2f, 0.2f));
-	rightMat.translate(glm::vec4{ -0.5f, -0.5f, -0.5f, -0.5f });
+	{
+		m4::Mat5 mat = MV;
+		mat *= rotor;
+		mat.translate(offset);
+		//mat *= m4::Rotor{ m4::BiVector4{ 0,0,0,0,0,1 }, glm::pi<float>() * 0.5f }; // xyw test
+		mat *= m4::Rotor{ m4::BiVector4{ 0,0,1,0,0,0 }, glm::pi<float>() * 0.25f }; // 45deg XW
+		mat.scale(glm::vec4{ 0.4f });
+		mat.translate(glm::vec4{ 0, (inHand ? -2.5f : 0) + 5.45f, 0, 0 });
+		mat.scale(glm::vec4{ 2.0f, 0.2f, 0.1f, 2.0f });
+		mat.translate(glm::vec4{ -0.5f, -0.5f, -0.5f, -0.5001f });
 
-	m4::Mat5 leftStringMat = MV;
-	leftStringMat *= rotor;
-	leftStringMat.translate(glm::vec4{ .4, 1.37, 0, 0 });
-	leftStringMat.translate(offset);
-	leftStringMat.scale(glm::vec4(.22, .06f, 0.22f, 0.06f));
-	leftStringMat.translate(glm::vec4{ -0.5f, -0.5f, -0.5f, -0.5f });
+		stringShader->use();
+		glUniform1fv(glGetUniformLocation(stringShader->id(), "MV"), sizeof(m4::Mat5) / sizeof(float), &mat[0][0]);
+		glUniform4f(glGetUniformLocation(stringShader->id(), "inColor"), colors[type].x, colors[type].y, colors[type].z, 0.9f);
 
-	m4::Mat5 rightStringMat = MV;
-	rightStringMat *= rotor;
-	rightStringMat.translate(glm::vec4{ -.4, 1.37, 0, 0 });
-	rightStringMat.translate(offset);
-	rightStringMat.scale(glm::vec4(.22, 0.06f, 0.22f, 0.06f));
-	rightStringMat.translate(glm::vec4{ -0.5f, -0.5f, -0.5f, -0.5f });
-
-	m4::Mat5 stringMat = MV;
-	stringMat *= rotor;
-	stringMat.translate(glm::vec4{ 0, 1.37, 0, 0 });
-	stringMat.translate(offset);
-	stringMat.scale(glm::vec4(1, 0.03f, 0.03f, 0.03f));
-	stringMat.translate(glm::vec4{ -0.5f, -0.5f, -0.5f, -0.5f });
-
-	const Tex2D* tex = ResourceManager::get("tiles.png", false);
-	const Shader* shaderWood = ShaderManager::get("blockNormalShader");
-	const Shader* slingshotShader = ShaderManager::get("tetSolidColorNormalShader");
-	tex->use();
-
-	shaderWood->use();
-	glUniform4fv(glGetUniformLocation(shaderWood->id(), "lightDir"), 1, &lightDir.x);
-	glUniform2ui(glGetUniformLocation(shaderWood->id(), "texSize"), 96, 16);
-
-	glUniform1fv(glGetUniformLocation(shaderWood->id(), "MV"), sizeof(handleMat) / sizeof(float), &handleMat[0][0]);
-
-	BlockInfo::renderItemMesh(handleType);
-
-	glUniform1fv(glGetUniformLocation(shaderWood->id(), "MV"), sizeof(connectorMat) / sizeof(float), &connectorMat[0][0]);
-
-	BlockInfo::renderItemMesh(handleType);
-
-	glUniform1fv(glGetUniformLocation(shaderWood->id(), "MV"), sizeof(leftMat) / sizeof(float), &leftMat[0][0]);
-
-	BlockInfo::renderItemMesh(handleType);
-
-	glUniform1fv(glGetUniformLocation(shaderWood->id(), "MV"), sizeof(rightMat) / sizeof(float), &rightMat[0][0]);
-
-	BlockInfo::renderItemMesh(handleType);
-
-	slingshotShader->use();
-	glUniform4fv(glGetUniformLocation(slingshotShader->id(), "lightDir"), 1, &lightDir.x);
-	glUniform4f(glGetUniformLocation(slingshotShader->id(), "inColor"), colorString.r, colorString.g, colorString.b, 1);
-
-	glUniform1fv(glGetUniformLocation(slingshotShader->id(), "MV"), sizeof(leftStringMat) / sizeof(float), &leftStringMat[0][0]);
-
-	ItemMaterial::barRenderer.render();
-
-	glUniform1fv(glGetUniformLocation(slingshotShader->id(), "MV"), sizeof(rightStringMat) / sizeof(float), &rightStringMat[0][0]);
-
-	ItemMaterial::barRenderer.render();
-
-	glUniform1fv(glGetUniformLocation(slingshotShader->id(), "MV"), sizeof(stringMat) / sizeof(float), &stringMat[0][0]);
-
-	ItemMaterial::barRenderer.render();
-
+		stringRenderer.render();
+	}
 }
 
 nlohmann::json ItemSlingshot::saveAttributes() {
@@ -194,13 +137,102 @@ $hookStatic(std::unique_ptr<Item>, Item, instantiateItem, const stl::string& ite
 	if (type != "slingshot") return original(itemName, count, type, attributes);
 
 	auto result = std::make_unique<ItemSlingshot>();
-	try {
-		result->selectedBulletType = (ItemSlingshot::BulletType)(attributes["selectedBulletType"].get<int>());
-	}
-	catch(std::exception e){} // Compatibility with older versions
+	if (attributes.contains("selectedBulletType"))
+		result->selectedBulletType = (EntityProjectile::BulletType)(attributes["selectedBulletType"].get<int>());
 
-	result->type = itemName== "Slingshot" ? ItemSlingshot::TYPE_WOOD : ItemSlingshot::TYPE_DEADLY;
+	result->type = itemName == "Slingshot" ? ItemSlingshot::TYPE_WOOD : ItemSlingshot::TYPE_DEADLY;
 
 	result->count = count;
+	return result;
+}
+
+void ItemSlingshot::renderInit()
+{
+	// slingshot
+	{
+		fdo::Object obj = fdo::Object::load4DOFromFile((std::filesystem::path(fdm::getModPath(fdm::modID)) / "assets/models/slingshot.4do").string());
+		if (obj.isInvalid()) throw std::runtime_error("Failed to open the slingshot.4do model!");
+
+		std::vector<uint32_t> indexBuffer;
+		std::vector<fdo::Point> positions;
+		std::vector<fdo::Point> normals;
+		std::vector<fdo::Color> colors;
+		obj.tetrahedralize(indexBuffer, &positions, &normals, nullptr, &colors);
+
+		MeshBuilder mesh{ (int)indexBuffer.size() };
+
+		// pos
+		mesh.addBuff(positions.data(), positions.size() * sizeof(fdo::Point));
+		mesh.addAttr(GL_FLOAT, 4, sizeof(fdo::Point));
+		// normal
+		mesh.addBuff(normals.data(), normals.size() * sizeof(fdo::Point));
+		mesh.addAttr(GL_FLOAT, 4, sizeof(fdo::Point));
+		// color
+		mesh.addBuff(colors.data(), colors.size() * sizeof(fdo::Color));
+		mesh.addAttr(GL_UNSIGNED_BYTE, 4, sizeof(fdo::Color));
+
+		mesh.setIndexBuff(indexBuffer.data(), indexBuffer.size() * sizeof(uint32_t));
+
+		renderer = &mesh;
+
+		slingshotShader = ShaderManager::load("zihed.slingshot.slingshotShader",
+			"assets/shaders/slingshot.vs", "assets/shaders/slingshot.fs", "assets/shaders/slingshot.gs");
+	}
+
+	// string
+	{
+		MeshBuilder mesh{ BlockInfo::HYPERCUBE_FULL_INDEX_COUNT };
+
+		// pos
+		mesh.addBuff(BlockInfo::hypercube_full_verts, sizeof(BlockInfo::hypercube_full_verts));
+		mesh.addAttr(GL_UNSIGNED_BYTE, 4, sizeof(glm::u8vec4));
+
+		mesh.setIndexBuff(BlockInfo::hypercube_full_indices, sizeof(BlockInfo::hypercube_full_indices));
+
+		stringRenderer = &mesh;
+
+		stringShader = ShaderManager::load("zihed.slingshot.stringShader",
+			"assets/shaders/string.vs", "assets/shaders/string.fs", "assets/shaders/string.gs");
+	}
+}
+
+$hook(void, StateGame, updateProjection, int width, int height)
+{
+	original(self, width, height);
+
+	ItemSlingshot::slingshotShader->use();
+	glUniformMatrix4fv(glGetUniformLocation(ItemSlingshot::slingshotShader->id(), "P"), 1, false, &self->projection3D[0][0]);
+
+	ItemSlingshot::stringShader->use();
+	glUniformMatrix4fv(glGetUniformLocation(ItemSlingshot::stringShader->id(), "P"), 1, false, &self->projection3D[0][0]);
+}
+
+$hookStatic(bool, Item, loadItemInfo)
+{
+	bool result = original();
+
+	static bool loaded = false;
+	if (loaded) return result;
+	loaded = true;
+
+	for (auto& item : ItemSlingshot::slingshotTypeNames)
+	{
+		Item::blueprints[item.second] =
+		{
+		{ "type", "slingshot" },
+		{ "baseAttributes", {{"selectedBulletType",(int)EntityProjectile::BULLET_TYPE_DEFAULT}}}
+		};
+	}
+
+	return result;
+}
+
+$hookStatic(bool, CraftingMenu, loadRecipes)
+{
+	bool result = original();
+
+	utils::addRecipe("Slingshot", 1,			{ {{"name", "Stick"}, {"count", 3}},{{"name", "Hypersilk"}, {"count", 3}} });
+	utils::addRecipe("Deadly Slingshot", 1,		{ {{"name", "Deadly Bars"}, {"count", 3}},{{"name", "Hypersilk"}, {"count", 3}} });
+
 	return result;
 }
