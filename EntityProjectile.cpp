@@ -38,7 +38,13 @@ void EntityProjectile::update(World* world, double dt)
 							if (entity->getName() == "Projectile") continue;
 							if (entity->dead) continue;
 
-							glm::vec4 towardsCurrent = entity->getPos() - getPos();
+							glm::vec4 ePos = entity->getPos();
+							if (entity->getName() == "Player")
+							{
+								ePos += glm::vec4{ 0.0f, Player::HEIGHT * 0.5f, 0.0f, 0.0f };
+							}
+
+							glm::vec4 towardsCurrent = ePos - getPos();
 							float distSqr = glm::dot(towardsCurrent, towardsCurrent);
 							if (distSqr < targetDist * targetDist)
 							{
@@ -77,12 +83,28 @@ void EntityProjectile::update(World* world, double dt)
 		glm::ivec4 blockPos = position;
 		glm::ivec4 endPos;
 
-		if (intersect != nullptr) {
+		if (intersect != nullptr)
+		{
+			// reset hit timeout timers because those are unfun
+			if (intersect->getName() == "Player")
+			{
+				((EntityPlayer*)intersect)->player->damageTime = 0.0;
+			}
+			else if (intersect->getName() == "Spider")
+			{
+				((EntitySpider*)intersect)->hitTime = 0.0;
+			}
+			else if (intersect->getName() == "Butterfly")
+			{
+				((EntityButterfly*)intersect)->hitTime = 0.0;
+			}
 			intersect->takeDamage(damage, world);
+
 			dead = true;
 			playHitSound(position);
 		}
-		else if (world->castRay(a, blockPos, endPos, b)) {
+		else if (world->castRay(a, blockPos, endPos, b))
+		{
 			dead = BlockInfo::Blocks.at(world->getBlock(endPos)).solid;
 			if (dead)
 				playHitSound(position);
@@ -90,10 +112,12 @@ void EntityProjectile::update(World* world, double dt)
 	}
 }
 
+bool item = false;
 void EntityProjectile::renderBullet(EntityProjectile::BulletType type, const glm::vec4& position, const m4::Mat5& MV, bool glasses, const glm::vec4& lightDir)
 {
 	glm::vec3 color{ 1 };
-	switch (type) {
+	switch (type)
+	{
 	case 0: // stone
 		color = glm::vec3{ 0.6, 0.6, 0.6 };
 		break;
@@ -101,23 +125,23 @@ void EntityProjectile::renderBullet(EntityProjectile::BulletType type, const glm
 		color = glm::vec3{ 242.0f / 255.0f, 240.0f / 255.0f, 240.0f / 255.0f };
 		break;
 	case 2: // deadly
-		color = glm::vec3{ 232.0f / 255.0f, 77.0f / 255.0f, 193.0f / 255.0f } *1.4f;
+		color = glm::vec3{ 232.0f / 255.0f, 77.0f / 255.0f, 193.0f / 255.0f } * 1.3f;
 		break;
 	case 3: // solenoid
 		color = glm::vec3{ 196.0f / 255.0f, 90.0f / 255.0f, 112.0f / 255.0f };
 		break;
 	}
 
-	m4::Mat5 material = MV;
-	material.translate(glm::vec4{ 0.0f, 0.0f, 0.0f, 0.001f });
-	material.translate(position);
-	material.scale(glm::vec4{ 0.03f });
+	m4::Mat5 mat = MV;
+	mat.translate(glm::vec4{ 0.0f, 0.0f, 0.0f, 0.001f });
+	mat.translate(position);
+	mat.scale(glm::vec4{ size * (item ? 4.0f : 1.0f)});
 
 	projectileShader->use();
 
 	glUniform4fv(glGetUniformLocation(projectileShader->id(), "lightDir"), 1, &lightDir[0]);
 	glUniform4f(glGetUniformLocation(projectileShader->id(), "inColor"), color.r, color.g, color.b, 1);
-	glUniform1fv(glGetUniformLocation(projectileShader->id(), "MV"), sizeof(material) / sizeof(float), &material[0][0]);
+	glUniform1fv(glGetUniformLocation(projectileShader->id(), "MV"), sizeof(m4::Mat5) / sizeof(float), &mat[0][0]);
 
 	ItemTool::rockRenderer.render();
 
@@ -129,10 +153,11 @@ void EntityProjectile::renderBullet(EntityProjectile::BulletType type, const glm
 
 		glUniform1f(glGetUniformLocation(wireframeGlassesShader->id(), "wFar"), 8.0f);
 		glUniform4f(glGetUniformLocation(wireframeGlassesShader->id(), "inColor"), color.r, color.g, color.b, 1);
-		glUniform1fv(glGetUniformLocation(wireframeGlassesShader->id(), "MV"), sizeof(material) / sizeof(float), &material[0][0]);
+		glUniform1fv(glGetUniformLocation(wireframeGlassesShader->id(), "MV"), sizeof(m4::Mat5) / sizeof(float), &mat[0][0]);
 
 		EntitySpider::wireframeRenderer.render();
 	}
+	item = false;
 }
 
 void EntityProjectile::render(const World* world, const m4::Mat5& MV, bool glasses)
@@ -277,6 +302,7 @@ $hookStatic(bool, Entity, loadEntityInfo)
 	return result;
 }
 
+
 $hookStatic(bool, Item, loadItemInfo)
 {
 	bool result = original();
@@ -341,7 +367,8 @@ $hook(void, ItemMaterial, renderEntity, const m4::Mat5& MV, bool inHand, const g
 {
 	if (EntityProjectile::bulletTypes.contains(self->name))
 	{
-		return EntityProjectile::renderBullet(EntityProjectile::bulletTypes.at(self->name), { 0,0,0,0 }, MV, false, lightDir);
+		::item = true;
+		return EntityProjectile::renderBullet(EntityProjectile::bulletTypes.at(self->name), { 0,0,-0.1f,0 }, MV, false, lightDir);
 	}
 	return original(self, MV, inHand, lightDir);
 }

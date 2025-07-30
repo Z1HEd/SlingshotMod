@@ -1,8 +1,9 @@
-This is the first mod to ever add shooting weapons to the game: the Wooden Slingshot, which can be crafted with 3 Sticks and 3 Hypersilk, and the Deadly Slingshot, which can be crafted with 3 Deadly Bars and 3 Hypersilk.
-Hold the Right Mouse Button to draw a Slingshot, and release to shoot.
+This is the first ever mod to add shooting weapons to the game: the Wooden Slingshot, which can be crafted with 3 Sticks and 3 Hypersilk, and the Deadly Slingshot, which can be crafted with 3 Deadly Bars and 3 Hypersilk.
+Hold the RMB to draw a Slingshot, and release to shoot.
 Shooting before the Slingshot is completely drawn will deal less damage.
-Deadly Slingshot is more accurate, shoots faster and further. 
+Deadly Slingshot is more accurate, shoots faster and further.
 There are 4 types of bullets: Stone, Iron, Deadly and Solenoid, crafted out of their respective materials.
 Each of the first 3 bullets have more damage than the previous, Deadly Bullet dealing the most.
 The Solenoid Bullet has less damage than the Deadly, but is attracted to nearby entities.
 To change between types of bullets press R and F keys. (Supports 4DKeyBinds)
+To increase the amount of bullets per shot press LMB while drawing, up to 5 bullets per shot.

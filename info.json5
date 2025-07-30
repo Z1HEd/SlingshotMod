@@ -1,15 +1,16 @@
 {
-  id: "zihed.slingshot",
-  name: "Slingshots",
-  author: "ZiHEd, Tr1NgleDev",
-  descriptionFile: "description.txt",
-  version: "2.0",
-  gameVersion: "0.2.1.4",
-  modDLL: "4DMod.dll",
-  externalDLLs: [
-  ],
-  dependencies: {
-	"tr1ngledev.4dkeybinds": "? before",
-	"tr1ngledev.json-data": "before"
-  },
+	id: "zihed.slingshot",
+	name: "Slingshots",
+	author: "ZiHEd, Tr1NgleDev",
+	descriptionFile: "description.txt",
+	version: "2.0",
+	gameVersion: "0.2.1.4",
+	modDLL: "4DMod.dll",
+	externalDLLs: [
+	],
+	dependencies: {
+		"tr1ngledev.4dkeybinds": "? before",
+		"tr1ngledev.json-data": "before",
+		"tr1ngledev.4dvr": "? before >= 0.9.2"
+	}
 }

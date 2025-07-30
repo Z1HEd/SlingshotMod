@@ -33,11 +33,13 @@ public:
 	};
 
 	inline static constexpr float gravity = 50;
+	inline static constexpr float size = 0.05f / (Dodecaplex::radius * 2.0f);
+
 	glm::vec4 position;
 	glm::vec4 velocity;
 	stl::uuid ownerPlayerId;
 	float damage = 0;
-	float timeTillVisible = 0.02;
+	float timeTillVisible = 0.01;
 	BulletType type;
 	bool playedHitSound = false;
 	

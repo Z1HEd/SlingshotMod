@@ -3,9 +3,6 @@
 layout(lines_adjacency) in;
 layout(triangle_strip, max_vertices = 4) out;
 
-in vec4 gsVertPos[];
-out vec4 fsVertPos;
-
 // projection matrix is handled here after the coordinates are converted to 3D
 uniform mat4 P;
 
@@ -42,8 +39,6 @@ void main()
 			a = (-p0[3]) / (p1[3] - p0[3]);
 		}
 		gl_Position = P * vec4(mix(p0.xyz, p1.xyz, a), 1.0);
-
-		fsVertPos = mix(gsVertPos[e.x], gsVertPos[e.y], a);
 
 		EmitVertex();
 

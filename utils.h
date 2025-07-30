@@ -2,7 +2,8 @@
 
 #include <4dm.h>
 
-namespace utils {
+namespace utils
+{
 	inline double render_lastTime = 0;
 	inline double render_time = 0.01;
 	inline double render_dt = 0.01;
@@ -42,13 +43,18 @@ namespace utils {
 	}
 	inline float easeInOutQuad(float x)
 	{
-		return x < 0.5f ? 2.0f * x * x : 1.0f - powf(-2.0f * x + 2.0f, 2.0f) / 2.0f;
+		return x < 0.5f ? 2.0f * x * x : 1.0f - pow(-2.0f * x + 2.0f, 2.0f) / 2.0f;
+	}
+	inline float easeOutExpo(float x)
+	{
+		return x == 1.0f ? 1.0f : 1.0f - pow(2.0f, -10.0f * x);
 	}
 
 	inline constexpr void addRecipe(const fdm::stl::string& resultName, int resultCount, const nlohmann::json& recipe)
 	{
 		assert(recipe.is_array());
-		if (!std::any_of(fdm::CraftingMenu::recipes.begin(), fdm::CraftingMenu::recipes.end(), [&](auto& x) { return x["result"]["name"] == (std::string)resultName; }))
+		if (!std::any_of(fdm::CraftingMenu::recipes.begin(), fdm::CraftingMenu::recipes.end(), [&](auto& x)
+			{ return x["recipe"] == recipe; }))
 			fdm::CraftingMenu::recipes.push_back(
 				nlohmann::json{
 				{"recipe", recipe},
