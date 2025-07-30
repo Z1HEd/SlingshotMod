@@ -54,7 +54,7 @@ namespace utils
 	{
 		assert(recipe.is_array());
 		if (!std::any_of(fdm::CraftingMenu::recipes.begin(), fdm::CraftingMenu::recipes.end(), [&](auto& x)
-			{ return x["recipe"] == recipe; }))
+			{ return x["recipe"] == recipe && x["result"]["name"] == (std::string)resultName && x["result"]["count"] == resultCount; }))
 			fdm::CraftingMenu::recipes.push_back(
 				nlohmann::json{
 				{"recipe", recipe},
