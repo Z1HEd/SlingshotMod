@@ -65,7 +65,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;_ITERATOR_DEBUG_LEVEL=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>./4dm.h;./4dm.h/networking/include;%(AdditionalIncludeDirectories);./libs</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>./4dm.h;./4dm.h/networking/include;%(AdditionalIncludeDirectories);./libs;./4do-lib/include/</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -73,7 +73,8 @@
       <AdditionalDependencies>./4dm.h/networking/lib/*;./4dm.h/soil/soil2.lib;opengl32.lib;./4dm.h/glew32.lib;./4dm.h/glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>"$(ProjectDir)postbuild.bat" "$(TargetPath)" "$(ProjectDir)"</Command>
+      <Command>
+      </Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -85,7 +86,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>./4dm.h;./4dm.h/networking/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>./4dm.h;./4dm.h/networking/include;%(AdditionalIncludeDirectories);;./4do-lib/include/</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
@@ -96,10 +97,12 @@
       <AdditionalDependencies>./4dm.h/networking/lib/*;./4dm.h/soil/soil2.lib;opengl32.lib;./4dm.h/GL/glew32.lib;./4dm.h/glfw/glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>"$(ProjectDir)postbuild.bat" "$(TargetPath)" "$(ProjectDir)"</Command>
+      <Command>
+      </Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="EntityPlayer.cpp" />
     <ClCompile Include="EntityProjectile.cpp" />
     <ClCompile Include="ItemSlingshot.cpp" />
     <ClCompile Include="main.cpp" />
@@ -114,6 +117,9 @@
     <ClInclude Include="JSONPacket.h" />
     <ClInclude Include="utils.h" />
     <ClInclude Include="ItemSlingshot.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="description.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -4,3 +4,6 @@
 [submodule "auilib"]
 	path = auilib
 	url = https://github.com/Z1HEd/auilib
+[submodule "4do-lib"]
+	path = 4do-lib
+	url = https://github.com/Tr1NgleDev/4do-lib.git
