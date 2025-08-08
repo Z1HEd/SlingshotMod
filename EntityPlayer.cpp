@@ -32,7 +32,7 @@ $hook(void, EntityPlayer, update, World* world, double dt)
 					stringVelAdd *= glm::min(velL, 20.0f);
 				}
 
-				slingshot->stringVel -= stringVelAdd * (float)dt;
+				slingshot->stringVel -= stringVelAdd * (float)(dt * 0.75);
 			}
 
 			slingshot->stringTargetPos = glm::vec4{ 0 };

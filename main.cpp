@@ -223,7 +223,7 @@ $hook(void, Player, update, World* world, double dt, EntityPlayer* entityPlayer)
 			stringVelAdd *= glm::min(velL, 20.0f);
 		}
 
-		slingshot->stringVel -= stringVelAdd * (float)dt;
+		slingshot->stringVel -= stringVelAdd * (float)(dt * 0.75);
 	}
 
 	slingshot->stringVel += (slingshot->stringTargetPos - slingshot->stringPos) * ItemSlingshot::stringStiffness * (float)dt;
